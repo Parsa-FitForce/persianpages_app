@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { categoriesApi, listingsApi } from '../services/api';
 import type { Category } from '../types';
+import { countries, searchCities, getCountryByCode, type Country, type City } from '../i18n/locations';
 
 export default function ListingForm() {
   const { id } = useParams<{ id: string }>();
@@ -11,6 +12,9 @@ export default function ListingForm() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showCountryList, setShowCountryList] = useState(false);
+  const [showCityList, setShowCityList] = useState(false);
+  const [selectedCountryCode, setSelectedCountryCode] = useState<string>('');
 
   const [form, setForm] = useState({
     title: '',
@@ -31,6 +35,16 @@ export default function ListingForm() {
   useEffect(() => {
     categoriesApi.getAll().then((res) => setCategories(res.data));
 
+    // Pre-select country from localStorage if available
+    const savedCountry = localStorage.getItem('selectedCountry');
+    if (savedCountry && !isEdit) {
+      const country = getCountryByCode(savedCountry);
+      if (country) {
+        setForm(prev => ({ ...prev, country: country.name }));
+        setSelectedCountryCode(savedCountry);
+      }
+    }
+
     if (isEdit && id) {
       listingsApi.getOne(id).then((res) => {
         const l = res.data;
@@ -49,9 +63,24 @@ export default function ListingForm() {
           photos: l.photos.length > 0 ? l.photos : [''],
           isActive: l.isActive,
         });
+        // Find country code from name
+        const foundCountry = countries.find(c => c.name === l.country);
+        if (foundCountry) setSelectedCountryCode(foundCountry.code);
       });
     }
   }, [id, isEdit]);
+
+  const filteredCountries = useMemo(() => {
+    if (!form.country) return countries;
+    const query = form.country.toLowerCase();
+    return countries.filter(
+      (c) => c.name.includes(form.country) || c.nameEn.toLowerCase().includes(query)
+    );
+  }, [form.country]);
+
+  const availableCities = useMemo(() => {
+    return searchCities(form.city, selectedCountryCode || undefined);
+  }, [form.city, selectedCountryCode]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -61,6 +90,25 @@ export default function ListingForm() {
       ...prev,
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
     }));
+  };
+
+  const handleCountrySelect = (country: Country) => {
+    setForm((prev) => ({ ...prev, country: country.name, city: '' }));
+    setSelectedCountryCode(country.code);
+    setShowCountryList(false);
+  };
+
+  const handleCitySelect = (city: City) => {
+    setForm((prev) => ({ ...prev, city: city.name }));
+    // Also set country if not already set
+    if (!form.country) {
+      const country = getCountryByCode(city.country);
+      if (country) {
+        setForm((prev) => ({ ...prev, country: country.name }));
+        setSelectedCountryCode(city.country);
+      }
+    }
+    setShowCityList(false);
   };
 
   const handlePhotoChange = (index: number, value: string) => {
@@ -190,20 +238,8 @@ export default function ListingForm() {
           <h2 className="font-semibold">موقعیت مکانی</h2>
 
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                شهر *
-              </label>
-              <input
-                type="text"
-                name="city"
-                value={form.city}
-                onChange={handleChange}
-                className="input"
-                required
-              />
-            </div>
-            <div>
+            {/* Country with autocomplete */}
+            <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 کشور *
               </label>
@@ -212,9 +248,61 @@ export default function ListingForm() {
                 name="country"
                 value={form.country}
                 onChange={handleChange}
+                onFocus={() => setShowCountryList(true)}
+                onBlur={() => setTimeout(() => setShowCountryList(false), 200)}
                 className="input"
+                placeholder="نام کشور را تایپ کنید"
+                autoComplete="off"
                 required
               />
+              {showCountryList && filteredCountries.length > 0 && (
+                <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-lg mt-1 max-h-48 overflow-y-auto shadow-lg">
+                  {filteredCountries.map((c) => (
+                    <li
+                      key={c.code}
+                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center gap-2"
+                      onMouseDown={() => handleCountrySelect(c)}
+                    >
+                      <span>{c.flag}</span>
+                      <span>{c.name}</span>
+                      <span className="text-gray-400 text-sm">({c.nameEn})</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* City with autocomplete */}
+            <div className="relative">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                شهر *
+              </label>
+              <input
+                type="text"
+                name="city"
+                value={form.city}
+                onChange={handleChange}
+                onFocus={() => setShowCityList(true)}
+                onBlur={() => setTimeout(() => setShowCityList(false), 200)}
+                className="input"
+                placeholder="نام شهر را تایپ کنید"
+                autoComplete="off"
+                required
+              />
+              {showCityList && availableCities.length > 0 && (
+                <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-lg mt-1 max-h-48 overflow-y-auto shadow-lg">
+                  {availableCities.map((city) => (
+                    <li
+                      key={`${city.country}-${city.nameEn}`}
+                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
+                      onMouseDown={() => handleCitySelect(city)}
+                    >
+                      <span>{city.name}</span>
+                      <span className="text-gray-400 text-sm">{city.nameEn}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
 
@@ -228,6 +316,7 @@ export default function ListingForm() {
               value={form.address}
               onChange={handleChange}
               className="input"
+              placeholder="خیابان، پلاک، واحد"
               required
             />
           </div>
@@ -247,8 +336,9 @@ export default function ListingForm() {
                 name="phone"
                 value={form.phone}
                 onChange={handleChange}
-                className="input"
+                className="input text-left"
                 dir="ltr"
+                placeholder="+1 234 567 8900"
               />
             </div>
             <div>
@@ -260,7 +350,7 @@ export default function ListingForm() {
                 name="website"
                 value={form.website}
                 onChange={handleChange}
-                className="input"
+                className="input text-left"
                 dir="ltr"
                 placeholder="https://"
               />
@@ -282,7 +372,7 @@ export default function ListingForm() {
                 name="instagram"
                 value={form.instagram}
                 onChange={handleChange}
-                className="input"
+                className="input text-left"
                 dir="ltr"
                 placeholder="username"
               />
@@ -296,7 +386,7 @@ export default function ListingForm() {
                 name="telegram"
                 value={form.telegram}
                 onChange={handleChange}
-                className="input"
+                className="input text-left"
                 dir="ltr"
                 placeholder="username"
               />
@@ -310,7 +400,7 @@ export default function ListingForm() {
                 name="whatsapp"
                 value={form.whatsapp}
                 onChange={handleChange}
-                className="input"
+                className="input text-left"
                 dir="ltr"
                 placeholder="+1234567890"
               />
@@ -329,7 +419,7 @@ export default function ListingForm() {
                 type="url"
                 value={photo}
                 onChange={(e) => handlePhotoChange(index, e.target.value)}
-                className="input flex-1"
+                className="input flex-1 text-left"
                 dir="ltr"
                 placeholder="https://example.com/image.jpg"
               />

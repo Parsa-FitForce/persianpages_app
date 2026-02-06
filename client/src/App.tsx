@@ -9,6 +9,7 @@ import AuthCallback from './pages/AuthCallback';
 import Dashboard from './pages/Dashboard';
 import ListingDetail from './pages/ListingDetail';
 import ListingForm from './pages/ListingForm';
+import SelectCountry from './pages/SelectCountry';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -49,59 +50,72 @@ function GuestRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
-      <main>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/search" element={<Search />} />
-          <Route path="/listing/:id" element={<ListingDetail />} />
+      <Routes>
+        {/* Select Country - No Header */}
+        <Route path="/select-country" element={<SelectCountry />} />
 
-          <Route
-            path="/login"
-            element={
-              <GuestRoute>
-                <Login />
-              </GuestRoute>
-            }
-          />
-          <Route
-            path="/register"
-            element={
-              <GuestRoute>
-                <Register />
-              </GuestRoute>
-            }
-          />
-          <Route path="/auth/callback" element={<AuthCallback />} />
+        {/* All other routes with Header */}
+        <Route
+          path="*"
+          element={
+            <>
+              <Header />
+              <main>
+                <Routes>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/search" element={<Search />} />
+                  <Route path="/listing/:id" element={<ListingDetail />} />
 
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/listings/new"
-            element={
-              <ProtectedRoute>
-                <ListingForm />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/listings/:id/edit"
-            element={
-              <ProtectedRoute>
-                <ListingForm />
-              </ProtectedRoute>
-            }
-          />
+                  <Route
+                    path="/login"
+                    element={
+                      <GuestRoute>
+                        <Login />
+                      </GuestRoute>
+                    }
+                  />
+                  <Route
+                    path="/register"
+                    element={
+                      <GuestRoute>
+                        <Register />
+                      </GuestRoute>
+                    }
+                  />
+                  <Route path="/auth/callback" element={<AuthCallback />} />
 
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <Dashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/listings/new"
+                    element={
+                      <ProtectedRoute>
+                        <ListingForm />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/listings/:id/edit"
+                    element={
+                      <ProtectedRoute>
+                        <ListingForm />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </main>
+            </>
+          }
+        />
+      </Routes>
     </div>
   );
 }

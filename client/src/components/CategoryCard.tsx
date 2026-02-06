@@ -3,12 +3,17 @@ import type { Category } from '../types';
 
 interface Props {
   category: Category;
+  countryCode?: string;
 }
 
-export default function CategoryCard({ category }: Props) {
+export default function CategoryCard({ category, countryCode }: Props) {
+  const searchUrl = countryCode
+    ? `/search?category=${category.slug}&country=${countryCode}`
+    : `/search?category=${category.slug}`;
+
   return (
     <Link
-      to={`/search?category=${category.slug}`}
+      to={searchUrl}
       className="card p-6 text-center hover:shadow-md transition-shadow"
     >
       <div className="text-4xl mb-3">{category.icon}</div>

@@ -1,15 +1,17 @@
 FROM node:20-alpine
 
+RUN apk add --no-cache openssl
+
 WORKDIR /app
 
 COPY package*.json ./
 RUN npm install
 
+COPY prisma ./prisma
+RUN npx prisma generate
+
 COPY . .
 
-RUN npx prisma generate
-RUN chmod +x docker-entrypoint.sh
+EXPOSE 5001
 
-EXPOSE 5000
-
-ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["npm", "run", "dev"]

@@ -6,14 +6,35 @@ export default function Register() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
+  const validateEmail = (email: string) => {
+    return /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(email);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!validateEmail(email)) {
+      setError('لطفا یک ایمیل معتبر وارد کنید');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('رمز عبور باید حداقل ۶ کاراکتر باشد');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('رمز عبور و تکرار آن مطابقت ندارند');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -47,6 +68,7 @@ export default function Register() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="input"
+              minLength={2}
               required
             />
           </div>
@@ -59,7 +81,10 @@ export default function Register() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="input"
+              className="input text-left"
+              dir="ltr"
+              placeholder="example@email.com"
+              pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
               required
             />
           </div>
@@ -72,7 +97,24 @@ export default function Register() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="input"
+              className="input text-left"
+              dir="ltr"
+              minLength={6}
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">حداقل ۶ کاراکتر</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              تکرار رمز عبور
+            </label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="input text-left"
+              dir="ltr"
               minLength={6}
               required
             />
