@@ -1,0 +1,31 @@
+# PersianPages Terraform Variables
+# Copy this file to terraform.tfvars and fill in the values
+
+# AWS Configuration
+aws_region  = "us-east-1"
+environment = "prod"
+app_name    = "persianpages"
+
+# Database Configuration
+db_username = "postgres"
+db_password = "CHANGE_ME_TO_A_SECURE_PASSWORD"
+
+# Application Secrets
+jwt_secret = "CHANGE_ME_TO_A_SECURE_RANDOM_STRING"
+
+# Google OAuth (optional - leave empty to disable)
+google_client_id     = ""
+google_client_secret = ""
+
+# Custom Domain (optional)
+# domain_name         = "persianpages.com"
+# acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc123"
+
+# ECS Configuration
+ecs_cpu           = 512
+ecs_memory        = 1024
+ecs_desired_count = 1
+
+# VPC Configuration
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b"]
