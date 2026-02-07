@@ -5,6 +5,7 @@ export default {
     extend: {
       fontFamily: {
         vazir: ['Vazirmatn', 'system-ui', 'sans-serif'],
+        latin: ['Inter', 'system-ui', 'sans-serif'],
       },
       colors: {
         primary: {

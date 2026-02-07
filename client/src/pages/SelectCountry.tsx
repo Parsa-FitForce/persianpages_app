@@ -31,12 +31,11 @@ export default function SelectCountry() {
             <button
               key={country.code}
               onClick={() => handleCountrySelect(country.code)}
-              className="bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center hover:bg-white/20 transition-all hover:scale-105 border border-white/20"
+              className="bg-white/10 backdrop-blur-sm rounded-xl p-5 text-center hover:bg-white/20 transition-all hover:scale-105 border border-white/20 group"
             >
-              <div className="text-4xl mb-2">{country.flag}</div>
-              <h3 className="font-semibold text-white text-lg">{country.name}</h3>
-              <p className="text-primary-200 text-sm">{country.nameEn}</p>
-              <p className="text-primary-300 text-xs mt-1">{country.population} ایرانی</p>
+              <div className="text-5xl mb-3 group-hover:scale-110 transition-transform">{country.flag}</div>
+              <h3 className="font-semibold text-white text-lg mb-1">{country.name}</h3>
+              <p className="text-primary-200 text-sm font-latin">{country.nameEn}</p>
             </button>
           ))}
         </div>
@@ -56,8 +55,7 @@ export default function SelectCountry() {
 
         {/* Footer */}
         <div className="text-center mt-16 text-primary-200 text-sm">
-          <p>بیش از ۴ میلیون ایرانی در سراسر جهان</p>
-          <p className="mt-1">۲۰+ کشور • ۱۰۰+ شهر</p>
+          <p>۲۰+ کشور • ۱۰۰+ شهر</p>
         </div>
       </div>
     </div>

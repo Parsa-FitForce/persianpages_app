@@ -3,7 +3,17 @@
 @tailwind utilities;
 
 * {
-  font-family: 'Vazirmatn', system-ui, sans-serif;
+  font-family: 'Vazirmatn', 'Inter', system-ui, sans-serif;
+}
+
+/* Use Inter for Latin characters */
+:lang(en), [dir="ltr"], .font-latin {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* Mixed content - Vazirmatn for Farsi, Inter for Latin */
+.text-left, input[dir="ltr"], [dir="ltr"] input {
+  font-family: 'Inter', 'Vazirmatn', system-ui, sans-serif;
 }
 
 body {

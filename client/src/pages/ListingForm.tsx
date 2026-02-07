@@ -265,7 +265,7 @@ export default function ListingForm() {
                     >
                       <span>{c.flag}</span>
                       <span>{c.name}</span>
-                      <span className="text-gray-400 text-sm">({c.nameEn})</span>
+                      <span className="text-gray-400 text-sm font-latin">({c.nameEn})</span>
                     </li>
                   ))}
                 </ul>
@@ -298,7 +298,7 @@ export default function ListingForm() {
                       onMouseDown={() => handleCitySelect(city)}
                     >
                       <span>{city.name}</span>
-                      <span className="text-gray-400 text-sm">{city.nameEn}</span>
+                      <span className="text-gray-400 text-sm font-latin">{city.nameEn}</span>
                     </li>
                   ))}
                 </ul>

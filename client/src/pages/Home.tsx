@@ -58,7 +58,7 @@ export default function Home() {
                 کسب‌وکارهای ایرانی در {selectedCountry.name}
               </h1>
               <p className="text-lg text-primary-100 mb-2">
-                {selectedCountry.population} ایرانی • {countryCities.length} شهر
+                {countryCities.length} شهر
               </p>
             </>
           ) : (

@@ -75,7 +75,7 @@ export default function CountrySelector({ compact = false }: Props) {
                 <span className="text-xl">🌍</span>
                 <div>
                   <div className="font-medium">همه کشورها</div>
-                  <div className="text-xs text-gray-500">All Countries</div>
+                  <div className="text-xs text-gray-500 font-latin">All Countries</div>
                 </div>
               </button>
               <div className="border-t border-gray-100" />
@@ -90,9 +90,8 @@ export default function CountrySelector({ compact = false }: Props) {
                   <span className="text-xl">{country.flag}</span>
                   <div className="flex-1">
                     <div className="font-medium">{country.name}</div>
-                    <div className="text-xs text-gray-500">{country.nameEn}</div>
+                    <div className="text-xs text-gray-500 font-latin">{country.nameEn}</div>
                   </div>
-                  <span className="text-xs text-gray-400">{country.population}</span>
                 </button>
               ))}
             </div>
@@ -109,7 +108,7 @@ export default function CountrySelector({ compact = false }: Props) {
           <span className="text-2xl">{selectedCountry.flag}</span>
           <div>
             <div className="font-medium">{selectedCountry.name}</div>
-            <div className="text-xs text-gray-500">{selectedCountry.nameEn}</div>
+            <div className="text-xs text-gray-500 font-latin">{selectedCountry.nameEn}</div>
           </div>
           <button
             onClick={handleChangeCountry}
