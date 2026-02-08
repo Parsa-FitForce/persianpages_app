@@ -9,7 +9,7 @@ max_attempts=30
 attempt=0
 
 while [ $attempt -lt $max_attempts ]; do
-    if npx prisma db execute --stdin <<< "SELECT 1" > /dev/null 2>&1; then
+    if echo "SELECT 1" | npx prisma db execute --stdin > /dev/null 2>&1; then
         echo "Database is ready!"
         break
     fi
@@ -23,9 +23,9 @@ if [ $attempt -eq $max_attempts ]; then
     exit 1
 fi
 
-# Run database migrations
-echo "Running database migrations..."
-npx prisma migrate deploy
+# Sync database schema
+echo "Syncing database schema..."
+npx prisma db push --skip-generate
 
 # Seed database (only if needed)
 if [ "$SEED_DATABASE" = "true" ]; then
