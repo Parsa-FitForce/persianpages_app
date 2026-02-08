@@ -1,12 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { PrismaClient, User } from '@prisma/client';
+import { PrismaClient, User as PrismaUser } from '@prisma/client';
 
 declare global {
   namespace Express {
-    interface Request {
-      user?: User;
-    }
+    interface User extends PrismaUser {}
   }
 }
 
