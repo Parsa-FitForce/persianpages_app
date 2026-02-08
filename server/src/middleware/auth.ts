@@ -2,12 +2,16 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { PrismaClient, User } from '@prisma/client';
 
+declare global {
+  namespace Express {
+    interface Request {
+      user?: User;
+    }
+  }
+}
+
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
-
-export interface AuthRequest extends Request {
-  user?: User;
-}
 
 export const authenticate = async (
   req: Request,
@@ -31,7 +35,7 @@ export const authenticate = async (
       return res.status(401).json({ error: 'کاربر یافت نشد' });
     }
 
-    (req as AuthRequest).user = user;
+    req.user = user;
     next();
   } catch (error) {
     return res.status(401).json({ error: 'توکن نامعتبر است' });
@@ -52,7 +56,7 @@ export const optionalAuth = async (
         where: { id: decoded.id },
       });
       if (user) {
-        (req as AuthRequest).user = user;
+        req.user = user;
       }
     }
   } catch {

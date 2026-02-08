@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { authenticate, optionalAuth, AuthRequest } from '../middleware/auth.js';
+import { authenticate, optionalAuth } from '../middleware/auth.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -130,7 +130,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
         socialLinks,
         businessHours,
         photos: photos || [],
-        userId: (req as AuthRequest).user!.id,
+        userId: req.user!.id,
         categoryId,
       },
       include: {
@@ -157,7 +157,7 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'آگهی یافت نشد' });
     }
 
-    if (existing.userId !== (req as AuthRequest).user!.id) {
+    if (existing.userId !== req.user!.id) {
       return res.status(403).json({ error: 'شما اجازه ویرایش این آگهی را ندارید' });
     }
 
@@ -216,7 +216,7 @@ router.delete('/:id', authenticate, async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'آگهی یافت نشد' });
     }
 
-    if (existing.userId !== (req as AuthRequest).user!.id) {
+    if (existing.userId !== req.user!.id) {
       return res.status(403).json({ error: 'شما اجازه حذف این آگهی را ندارید' });
     }
 
@@ -232,7 +232,7 @@ router.delete('/:id', authenticate, async (req: Request, res: Response) => {
 router.get('/user/me', authenticate, async (req: Request, res: Response) => {
   try {
     const listings = await prisma.listing.findMany({
-      where: { userId: (req as AuthRequest).user!.id },
+      where: { userId: req.user!.id },
       include: { category: true },
       orderBy: { createdAt: 'desc' },
     });

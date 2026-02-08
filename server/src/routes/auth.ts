@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 import passport from '../config/passport.js';
-import { authenticate, generateToken, AuthRequest } from '../middleware/auth.js';
+import { authenticate, generateToken } from '../middleware/auth.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -69,7 +69,7 @@ router.post('/login', async (req: Request, res: Response) => {
 
 // Get current user
 router.get('/me', authenticate, async (req: Request, res: Response) => {
-  const user = (req as AuthRequest).user!;
+  const user = req.user!;
   res.json({ id: user.id, email: user.email, name: user.name });
 });
 
