@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { categoriesApi, listingsApi } from '../services/api';
 import type { Category, Listing } from '../types';
 import { getCountryByCode, getCitiesByCountry } from '../i18n/locations';
@@ -53,8 +54,20 @@ export default function Search() {
 
   const selectedCategory = categories.find(c => c.slug === categorySlug);
 
+  const titleParts = ['جستجو'];
+  if (search) titleParts.push(`«${search}»`);
+  if (selectedCategory) titleParts.push(selectedCategory.nameFa);
+  if (city) titleParts.push(city);
+  if (selectedCountry) titleParts.push(selectedCountry.name);
+  const searchTitle = `${titleParts.join(' - ')} | پرشین‌پیجز`;
+
   return (
     <div className="min-h-screen">
+      <Helmet>
+        <title>{searchTitle}</title>
+        <meta name="robots" content="noindex, follow" />
+      </Helmet>
+
       {/* Search Header */}
       <div className="bg-gradient-to-l from-primary-600 to-primary-700 text-white py-8">
         <div className="max-w-5xl mx-auto px-4">

@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { categoriesApi, listingsApi } from '../services/api';
+import { categoriesApi, listingsApi, uploadApi } from '../services/api';
 import type { Category } from '../types';
 import { countries, searchCities, getCountryByCode, type Country, type City } from '../i18n/locations';
+import { resolveImageUrl } from '../utils/image';
 
 export default function ListingForm() {
   const { id } = useParams<{ id: string }>();
@@ -28,7 +29,7 @@ export default function ListingForm() {
     instagram: '',
     telegram: '',
     whatsapp: '',
-    photos: [''],
+    photos: [] as string[],
     isActive: true,
   });
 
@@ -60,7 +61,7 @@ export default function ListingForm() {
           instagram: l.socialLinks?.instagram || '',
           telegram: l.socialLinks?.telegram || '',
           whatsapp: l.socialLinks?.whatsapp || '',
-          photos: l.photos.length > 0 ? l.photos : [''],
+          photos: l.photos.length > 0 ? l.photos : [],
           isActive: l.isActive,
         });
         // Find country code from name
@@ -111,17 +112,39 @@ export default function ListingForm() {
     setShowCityList(false);
   };
 
-  const handlePhotoChange = (index: number, value: string) => {
-    setForm((prev) => {
-      const photos = [...prev.photos];
-      photos[index] = value;
-      return { ...prev, photos };
-    });
-  };
+  const [uploading, setUploading] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const addPhoto = () => {
-    setForm((prev) => ({ ...prev, photos: [...prev.photos, ''] }));
-  };
+  const handleFiles = useCallback(async (files: FileList | File[]) => {
+    const fileArray = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    if (fileArray.length === 0) return;
+
+    const remaining = 6 - form.photos.filter((p) => p).length;
+    const toUpload = fileArray.slice(0, remaining);
+    if (toUpload.length === 0) return;
+
+    setUploading(true);
+    try {
+      const res = await uploadApi.uploadPhotos(toUpload);
+      setForm((prev) => ({
+        ...prev,
+        photos: [...prev.photos.filter((p) => p), ...res.data.urls],
+      }));
+    } catch {
+      setError('خطا در آپلود تصاویر');
+    } finally {
+      setUploading(false);
+    }
+  }, [form.photos]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(false);
+    if (e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files);
+    }
+  }, [handleFiles]);
 
   const removePhoto = (index: number) => {
     setForm((prev) => ({
@@ -410,38 +433,82 @@ export default function ListingForm() {
 
         {/* Photos */}
         <div className="card p-6 space-y-4">
-          <h2 className="font-semibold">تصاویر</h2>
-          <p className="text-sm text-gray-500">لینک تصاویر را وارد کنید</p>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold">تصاویر</h2>
+            <span className="text-sm text-gray-400">
+              {form.photos.filter((p) => p).length}/6
+            </span>
+          </div>
 
-          {form.photos.map((photo, index) => (
-            <div key={index} className="flex gap-2">
+          {/* Uploaded photos grid */}
+          {form.photos.filter((p) => p).length > 0 && (
+            <div className="grid grid-cols-3 gap-3">
+              {form.photos.filter((p) => p).map((photo, index) => (
+                <div key={index} className="relative group aspect-square rounded-xl overflow-hidden bg-gray-100">
+                  <img
+                    src={resolveImageUrl(photo)}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removePhoto(form.photos.indexOf(photo))}
+                    className="absolute top-2 left-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center text-sm opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                  >
+                    ✕
+                  </button>
+                  {index === 0 && (
+                    <span className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full">
+                      اصلی
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Drop zone */}
+          {form.photos.filter((p) => p).length < 6 && (
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+                dragActive
+                  ? 'border-primary-400 bg-primary-50'
+                  : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+              }`}
+            >
               <input
-                type="url"
-                value={photo}
-                onChange={(e) => handlePhotoChange(index, e.target.value)}
-                className="input flex-1 text-left"
-                dir="ltr"
-                placeholder="https://example.com/image.jpg"
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) handleFiles(e.target.files);
+                  e.target.value = '';
+                }}
               />
-              {form.photos.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removePhoto(index)}
-                  className="text-red-600 hover:text-red-700 px-3"
-                >
-                  حذف
-                </button>
+              {uploading ? (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+                  <p className="text-sm text-gray-500">در حال آپلود...</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <p className="text-sm text-gray-600">
+                    تصاویر را بکشید و رها کنید یا <span className="text-primary-600 font-medium">انتخاب کنید</span>
+                  </p>
+                  <p className="text-xs text-gray-400">JPG, PNG, WebP — حداکثر ۵MB هر تصویر</p>
+                </div>
               )}
             </div>
-          ))}
-
-          <button
-            type="button"
-            onClick={addPhoto}
-            className="text-primary-600 hover:text-primary-700 text-sm"
-          >
-            + افزودن تصویر
-          </button>
+          )}
         </div>
 
         {/* Status */}

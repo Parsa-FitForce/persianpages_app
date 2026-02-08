@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { listingsApi } from '../services/api';
 import type { Listing } from '../types';
 import { useAuth } from '../hooks/useAuth';
+import { resolveImageUrl } from '../utils/image';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -59,7 +60,7 @@ export default function Dashboard() {
                   <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center text-2xl">
                     {listing.photos[0] ? (
                       <img
-                        src={listing.photos[0]}
+                        src={resolveImageUrl(listing.photos[0])}
                         alt=""
                         className="w-full h-full object-cover rounded-lg"
                       />

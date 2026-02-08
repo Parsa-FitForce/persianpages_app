@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /listings/new
+Disallow: /login
+Disallow: /register
+Disallow: /auth/callback
+
+Sitemap: /sitemap.xml

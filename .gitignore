@@ -12,6 +12,9 @@ terraform/.terraform.lock.hcl
 terraform/terraform.tfvars
 terraform/*.tfplan
 
+# Uploads
+server/uploads/
+
 # IDE
 .idea/
 .vscode/

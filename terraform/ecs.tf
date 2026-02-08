@@ -143,6 +143,14 @@ resource "aws_ecs_task_definition" "api" {
         {
           name  = "CLIENT_URL"
           value = var.domain_name != "" ? "https://${var.domain_name}" : "https://${aws_cloudfront_distribution.frontend.domain_name}"
+        },
+        {
+          name  = "S3_UPLOADS_BUCKET"
+          value = aws_s3_bucket.uploads.id
+        },
+        {
+          name  = "S3_UPLOADS_REGION"
+          value = var.aws_region
         }
       ]
 
@@ -216,10 +224,8 @@ resource "aws_ecs_service" "api" {
     rollback = true
   }
 
-  deployment_configuration {
-    maximum_percent         = 200
-    minimum_healthy_percent = 100
-  }
+  deployment_maximum_percent         = 200
+  deployment_minimum_healthy_percent = 100
 
   # Wait for ALB listener to be ready
   depends_on = [

@@ -1,9 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import passport from './config/passport.js';
+import path from 'path';
 import authRoutes from './routes/auth.js';
 import listingsRoutes from './routes/listings.js';
 import categoriesRoutes from './routes/categories.js';
+import sitemapRoutes from './routes/sitemap.js';
+import uploadRoutes, { UPLOADS_DIR } from './routes/upload.js';
 import { PrismaClient } from '@prisma/client';
 
 const app = express();
@@ -17,11 +20,14 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(passport.initialize());
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/listings', listingsRoutes);
 app.use('/api/categories', categoriesRoutes);
+app.use('/api', sitemapRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

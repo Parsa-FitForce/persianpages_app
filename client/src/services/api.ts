@@ -56,4 +56,15 @@ export const listingsApi = {
   delete: (id: string) => api.delete(`/listings/${id}`),
 };
 
+// Upload
+export const uploadApi = {
+  uploadPhotos: (files: File[]) => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('photos', file));
+    return api.post<{ urls: string[] }>('/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+};
+
 export default api;

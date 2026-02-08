@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { countries } from '../i18n/locations';
 
 export default function SelectCountry() {
@@ -11,6 +12,11 @@ export default function SelectCountry() {
 
   return (
     <div className="min-h-screen bg-gradient-to-bl from-primary-600 to-primary-800">
+      <Helmet>
+        <title>انتخاب کشور | پرشین‌پیجز</title>
+        <meta name="description" content="کشور خود را انتخاب کنید و کسب‌وکارهای ایرانی نزدیک خود را پیدا کنید. بیش از ۲۰ کشور و ۱۰۰ شهر." />
+      </Helmet>
+
       <div className="max-w-5xl mx-auto px-4 py-16">
         {/* Header */}
         <div className="text-center mb-12">

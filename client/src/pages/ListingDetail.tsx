@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { listingsApi } from '../services/api';
 import type { Listing } from '../types';
 import { useAuth } from '../hooks/useAuth';
+import { getLocalBusinessSchema, getBreadcrumbSchema } from '../utils/structuredData';
+import { resolveImageUrl } from '../utils/image';
 
 export default function ListingDetail() {
   const { id } = useParams<{ id: string }>();
@@ -42,9 +45,37 @@ export default function ListingDetail() {
   }
 
   const isOwner = user?.id === listing.userId;
+  const listingTitle = `${listing.title} - ${listing.city}، ${listing.country} | پرشین‌پیجز`;
+  const listingDescription = listing.description.slice(0, 160);
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
+      <Helmet>
+        <title>{listingTitle}</title>
+        <meta name="description" content={listingDescription} />
+        <meta property="og:title" content={listingTitle} />
+        <meta property="og:description" content={listingDescription} />
+        <meta property="og:type" content="business.business" />
+        {listing.photos.length > 0 && (
+          <meta property="og:image" content={listing.photos[0]} />
+        )}
+        <meta name="twitter:title" content={listingTitle} />
+        <meta name="twitter:description" content={listingDescription} />
+        {listing.photos.length > 0 && (
+          <meta name="twitter:image" content={listing.photos[0]} />
+        )}
+        <script type="application/ld+json">
+          {JSON.stringify(getLocalBusinessSchema(listing))}
+        </script>
+        <script type="application/ld+json">
+          {JSON.stringify(getBreadcrumbSchema([
+            { name: 'پرشین‌پیجز', url: '/' },
+            { name: listing.category.nameFa, url: `/search?category=${listing.category.slug}` },
+            { name: listing.title, url: `/listings/${listing.id}` },
+          ]))}
+        </script>
+      </Helmet>
+
       {/* Header */}
       <div className="flex justify-between items-start mb-6">
         <div>
@@ -71,7 +102,7 @@ export default function ListingDetail() {
             {listing.photos.map((photo, idx) => (
               <img
                 key={idx}
-                src={photo}
+                src={resolveImageUrl(photo)}
                 alt={`${listing.title} - ${idx + 1}`}
                 className="w-full h-64 object-cover rounded-xl"
               />

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { categoriesApi, listingsApi } from '../services/api';
 import type { Category, Listing } from '../types';
 import { getCountryByCode, getCitiesByCountry } from '../i18n/locations';
 import CategoryCard from '../components/CategoryCard';
 import ListingCard from '../components/ListingCard';
+import { getWebsiteSchema } from '../utils/structuredData';
 
 export default function Home() {
   const [search, setSearch] = useState('');
@@ -46,8 +48,25 @@ export default function Home() {
     }
   };
 
+  const pageTitle = selectedCountry
+    ? `کسب‌وکارهای ایرانی در ${selectedCountry.name} | پرشین‌پیجز`
+    : 'پرشین‌پیجز - راهنمای کسب‌وکارهای ایرانی در سراسر جهان';
+  const pageDescription = selectedCountry
+    ? `راهنمای کسب‌وکارهای ایرانی در ${selectedCountry.name}. رستوران، پزشک، وکیل، سوپرمارکت و خدمات ایرانی را پیدا کنید.`
+    : 'راهنمای جامع کسب‌وکارهای ایرانی در سراسر جهان. رستوران، پزشک، وکیل، سوپرمارکت و خدمات ایرانی را در شهر خود پیدا کنید.';
+
   return (
     <div className="min-h-screen">
+      <Helmet>
+        <title>{pageTitle}</title>
+        <meta name="description" content={pageDescription} />
+        <meta property="og:title" content={pageTitle} />
+        <meta property="og:description" content={pageDescription} />
+        <script type="application/ld+json">
+          {JSON.stringify(getWebsiteSchema())}
+        </script>
+      </Helmet>
+
       {/* Hero */}
       <section className="bg-gradient-to-bl from-primary-600 to-primary-800 text-white py-16">
         <div className="max-w-4xl mx-auto px-4 text-center">

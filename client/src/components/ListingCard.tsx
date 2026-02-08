@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { Listing } from '../types';
+import { resolveImageUrl } from '../utils/image';
 
 interface Props {
   listing: Listing;
@@ -11,7 +12,7 @@ export default function ListingCard({ listing }: Props) {
       <div className="aspect-video bg-gray-100 relative">
         {listing.photos[0] ? (
           <img
-            src={listing.photos[0]}
+            src={resolveImageUrl(listing.photos[0])}
             alt={listing.title}
             className="w-full h-full object-cover"
           />
