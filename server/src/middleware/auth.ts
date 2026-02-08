@@ -10,7 +10,7 @@ export interface AuthRequest extends Request {
 }
 
 export const authenticate = async (
-  req: AuthRequest,
+  req: Request,
   res: Response,
   next: NextFunction
 ) => {
@@ -31,7 +31,7 @@ export const authenticate = async (
       return res.status(401).json({ error: 'کاربر یافت نشد' });
     }
 
-    req.user = user;
+    (req as AuthRequest).user = user;
     next();
   } catch (error) {
     return res.status(401).json({ error: 'توکن نامعتبر است' });
@@ -39,7 +39,7 @@ export const authenticate = async (
 };
 
 export const optionalAuth = async (
-  req: AuthRequest,
+  req: Request,
   res: Response,
   next: NextFunction
 ) => {
@@ -52,7 +52,7 @@ export const optionalAuth = async (
         where: { id: decoded.id },
       });
       if (user) {
-        req.user = user;
+        (req as AuthRequest).user = user;
       }
     }
   } catch {

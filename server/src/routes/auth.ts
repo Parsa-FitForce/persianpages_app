@@ -68,8 +68,8 @@ router.post('/login', async (req: Request, res: Response) => {
 });
 
 // Get current user
-router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
-  const user = req.user!;
+router.get('/me', authenticate, async (req: Request, res: Response) => {
+  const user = (req as AuthRequest).user!;
   res.json({ id: user.id, email: user.email, name: user.name });
 });
 

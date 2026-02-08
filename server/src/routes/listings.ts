@@ -93,7 +93,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // Create listing (auth required)
-router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/', authenticate, async (req: Request, res: Response) => {
   try {
     const {
       title,
@@ -130,7 +130,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
         socialLinks,
         businessHours,
         photos: photos || [],
-        userId: req.user!.id,
+        userId: (req as AuthRequest).user!.id,
         categoryId,
       },
       include: {
@@ -147,7 +147,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // Update listing (auth + owner required)
-router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
+router.put('/:id', authenticate, async (req: Request, res: Response) => {
   try {
     const existing = await prisma.listing.findUnique({
       where: { id: req.params.id },
@@ -157,7 +157,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'آگهی یافت نشد' });
     }
 
-    if (existing.userId !== req.user!.id) {
+    if (existing.userId !== (req as AuthRequest).user!.id) {
       return res.status(403).json({ error: 'شما اجازه ویرایش این آگهی را ندارید' });
     }
 
@@ -206,7 +206,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // Delete listing (auth + owner required)
-router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticate, async (req: Request, res: Response) => {
   try {
     const existing = await prisma.listing.findUnique({
       where: { id: req.params.id },
@@ -216,7 +216,7 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'آگهی یافت نشد' });
     }
 
-    if (existing.userId !== req.user!.id) {
+    if (existing.userId !== (req as AuthRequest).user!.id) {
       return res.status(403).json({ error: 'شما اجازه حذف این آگهی را ندارید' });
     }
 
@@ -229,10 +229,10 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // Get user's listings
-router.get('/user/me', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/user/me', authenticate, async (req: Request, res: Response) => {
   try {
     const listings = await prisma.listing.findMany({
-      where: { userId: req.user!.id },
+      where: { userId: (req as AuthRequest).user!.id },
       include: { category: true },
       orderBy: { createdAt: 'desc' },
     });
