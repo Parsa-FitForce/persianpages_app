@@ -1,9 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import jwt from 'jsonwebtoken';
 import { authenticate, optionalAuth } from '../middleware/auth.js';
+import { normalizePhone } from '../utils/phone.js';
 
 const router = Router();
 const prisma = new PrismaClient();
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
 
 // Get all listings (with search & filters)
 router.get('/', optionalAuth, async (req: Request, res: Response) => {
@@ -66,7 +69,7 @@ router.get('/', optionalAuth, async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Get listings error:', error);
-    res.status(500).json({ error: 'خطا در دریافت آگهی‌ها' });
+    res.status(500).json({ error: 'خطا در دریافت کسب‌وکارها' });
   }
 });
 
@@ -82,13 +85,13 @@ router.get('/:id', async (req: Request, res: Response) => {
     });
 
     if (!listing) {
-      return res.status(404).json({ error: 'آگهی یافت نشد' });
+      return res.status(404).json({ error: 'کسب‌وکار یافت نشد' });
     }
 
     res.json(listing);
   } catch (error) {
     console.error('Get listing error:', error);
-    res.status(500).json({ error: 'خطا در دریافت آگهی' });
+    res.status(500).json({ error: 'خطا در دریافت کسب‌وکار' });
   }
 });
 
@@ -107,10 +110,45 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       socialLinks,
       businessHours,
       photos,
+      latitude,
+      longitude,
+      placeId,
     } = req.body;
 
-    if (!title || !description || !categoryId || !address || !city || !country) {
-      return res.status(400).json({ error: 'لطفا فیلدهای الزامی را پر کنید' });
+    if (!title || !description || !categoryId || !address || !city || !country || !phone) {
+      return res.status(400).json({ error: 'لطفا فیلدهای الزامی را پر کنید (تلفن الزامی است)' });
+    }
+
+    // Verify phone verification token
+    const { verificationToken } = req.body;
+    if (!verificationToken) {
+      return res.status(400).json({ error: 'تایید شماره تلفن الزامی است' });
+    }
+
+    try {
+      const decoded = jwt.verify(verificationToken, JWT_SECRET) as {
+        userId: string;
+        phone: string;
+        verificationId: string;
+      };
+
+      if (decoded.userId !== req.user!.id) {
+        return res.status(403).json({ error: 'توکن تایید نامعتبر است' });
+      }
+
+      if (normalizePhone(decoded.phone) !== normalizePhone(phone)) {
+        return res.status(400).json({ error: 'شماره تلفن با شماره تایید شده مطابقت ندارد' });
+      }
+
+      const verification = await prisma.phoneVerification.findUnique({
+        where: { id: decoded.verificationId },
+      });
+
+      if (!verification || !verification.verified) {
+        return res.status(400).json({ error: 'تایید تلفن انجام نشده است' });
+      }
+    } catch (err) {
+      return res.status(400).json({ error: 'توکن تایید منقضی شده یا نامعتبر است' });
     }
 
     const category = await prisma.category.findUnique({ where: { id: categoryId } });
@@ -132,6 +170,9 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
         photos: photos || [],
         userId: req.user!.id,
         categoryId,
+        latitude: latitude ? parseFloat(latitude) : undefined,
+        longitude: longitude ? parseFloat(longitude) : undefined,
+        placeId,
       },
       include: {
         category: true,
@@ -142,7 +183,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
     res.status(201).json(listing);
   } catch (error) {
     console.error('Create listing error:', error);
-    res.status(500).json({ error: 'خطا در ایجاد آگهی' });
+    res.status(500).json({ error: 'خطا در ایجاد کسب‌وکار' });
   }
 });
 
@@ -154,11 +195,11 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
     });
 
     if (!existing) {
-      return res.status(404).json({ error: 'آگهی یافت نشد' });
+      return res.status(404).json({ error: 'کسب‌وکار یافت نشد' });
     }
 
     if (existing.userId !== req.user!.id) {
-      return res.status(403).json({ error: 'شما اجازه ویرایش این آگهی را ندارید' });
+      return res.status(403).json({ error: 'شما اجازه ویرایش این کسب‌وکار را ندارید' });
     }
 
     const {
@@ -174,6 +215,9 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
       businessHours,
       photos,
       isActive,
+      latitude,
+      longitude,
+      placeId,
     } = req.body;
 
     const listing = await prisma.listing.update({
@@ -191,6 +235,9 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
         businessHours,
         photos,
         isActive,
+        latitude: latitude !== undefined ? (latitude ? parseFloat(latitude) : null) : undefined,
+        longitude: longitude !== undefined ? (longitude ? parseFloat(longitude) : null) : undefined,
+        placeId: placeId !== undefined ? (placeId || null) : undefined,
       },
       include: {
         category: true,
@@ -201,7 +248,7 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
     res.json(listing);
   } catch (error) {
     console.error('Update listing error:', error);
-    res.status(500).json({ error: 'خطا در ویرایش آگهی' });
+    res.status(500).json({ error: 'خطا در ویرایش کسب‌وکار' });
   }
 });
 
@@ -213,18 +260,89 @@ router.delete('/:id', authenticate, async (req: Request, res: Response) => {
     });
 
     if (!existing) {
-      return res.status(404).json({ error: 'آگهی یافت نشد' });
+      return res.status(404).json({ error: 'کسب‌وکار یافت نشد' });
     }
 
     if (existing.userId !== req.user!.id) {
-      return res.status(403).json({ error: 'شما اجازه حذف این آگهی را ندارید' });
+      return res.status(403).json({ error: 'شما اجازه حذف این کسب‌وکار را ندارید' });
     }
 
     await prisma.listing.delete({ where: { id: req.params.id } });
-    res.json({ message: 'آگهی با موفقیت حذف شد' });
+    res.json({ message: 'کسب‌وکار با موفقیت حذف شد' });
   } catch (error) {
     console.error('Delete listing error:', error);
-    res.status(500).json({ error: 'خطا در حذف آگهی' });
+    res.status(500).json({ error: 'خطا در حذف کسب‌وکار' });
+  }
+});
+
+// Claim a scraped business (auth + phone verification required)
+router.post('/:id/claim', authenticate, async (req: Request, res: Response) => {
+  try {
+    const listing = await prisma.listing.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!listing) {
+      return res.status(404).json({ error: 'کسب‌وکار یافت نشد' });
+    }
+
+    if (listing.isClaimed) {
+      return res.status(400).json({ error: 'این کسب‌وکار قبلا ثبت شده است' });
+    }
+
+    if (!listing.phone) {
+      return res.status(400).json({ error: 'این کسب‌وکار شماره تلفن ندارد و امکان تایید مالکیت وجود ندارد' });
+    }
+
+    // Verify phone verification token
+    const { verificationToken } = req.body;
+    if (!verificationToken) {
+      return res.status(400).json({ error: 'تایید شماره تلفن الزامی است' });
+    }
+
+    try {
+      const decoded = jwt.verify(verificationToken, JWT_SECRET) as {
+        userId: string;
+        phone: string;
+        verificationId: string;
+      };
+
+      if (decoded.userId !== req.user!.id) {
+        return res.status(403).json({ error: 'توکن تایید نامعتبر است' });
+      }
+
+      if (normalizePhone(decoded.phone) !== normalizePhone(listing.phone)) {
+        return res.status(400).json({ error: 'شماره تلفن تایید شده با شماره کسب‌وکار مطابقت ندارد' });
+      }
+
+      const verification = await prisma.phoneVerification.findUnique({
+        where: { id: decoded.verificationId },
+      });
+
+      if (!verification || !verification.verified) {
+        return res.status(400).json({ error: 'تایید تلفن انجام نشده است' });
+      }
+    } catch (err) {
+      return res.status(400).json({ error: 'توکن تایید منقضی شده یا نامعتبر است' });
+    }
+
+    const claimed = await prisma.listing.update({
+      where: { id: req.params.id },
+      data: {
+        userId: req.user!.id,
+        isClaimed: true,
+        claimedAt: new Date(),
+      },
+      include: {
+        category: true,
+        user: { select: { id: true, name: true } },
+      },
+    });
+
+    res.json(claimed);
+  } catch (error) {
+    console.error('Claim listing error:', error);
+    res.status(500).json({ error: 'خطا در ثبت مالکیت کسب‌وکار' });
   }
 });
 
@@ -239,7 +357,7 @@ router.get('/user/me', authenticate, async (req: Request, res: Response) => {
     res.json(listings);
   } catch (error) {
     console.error('Get user listings error:', error);
-    res.status(500).json({ error: 'خطا در دریافت آگهی‌های شما' });
+    res.status(500).json({ error: 'خطا در دریافت کسب‌وکارهای شما' });
   }
 });
 

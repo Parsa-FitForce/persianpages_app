@@ -33,6 +33,14 @@ export function getLocalBusinessSchema(listing: Listing) {
     },
   };
 
+  if (listing.latitude && listing.longitude) {
+    schema.geo = {
+      '@type': 'GeoCoordinates',
+      latitude: listing.latitude,
+      longitude: listing.longitude,
+    };
+  }
+
   if (listing.phone) {
     schema.telephone = listing.phone;
   }

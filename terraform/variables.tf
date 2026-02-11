@@ -75,6 +75,32 @@ variable "acm_certificate_arn" {
   default     = ""
 }
 
+# Twilio Configuration
+variable "twilio_domain_verification" {
+  description = "Twilio domain verification TXT record value"
+  type        = string
+  default     = ""
+}
+
+variable "twilio_account_sid" {
+  description = "Twilio account SID"
+  type        = string
+  default     = ""
+}
+
+variable "twilio_auth_token" {
+  description = "Twilio auth token"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "twilio_messaging_sid" {
+  description = "Twilio messaging service SID"
+  type        = string
+  default     = ""
+}
+
 # ECS Configuration
 variable "ecs_cpu" {
   description = "ECS task CPU units (256, 512, 1024, 2048, 4096)"

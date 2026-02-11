@@ -149,7 +149,7 @@ export default function Home() {
       <section className="max-w-7xl mx-auto px-4 pb-16">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold">
-            {selectedCountry ? `آگهی‌های ${selectedCountry.name}` : 'آگهی‌های اخیر'}
+            {selectedCountry ? `کسب‌وکارهای ${selectedCountry.name}` : 'کسب‌وکارهای اخیر'}
           </h2>
           <button
             onClick={() => navigate(countryCode ? `/search?country=${countryCode}` : '/search')}
@@ -163,8 +163,8 @@ export default function Home() {
         ) : listings.length === 0 ? (
           <div className="text-center text-gray-500 py-12">
             {selectedCountry
-              ? `هنوز آگهی‌ای در ${selectedCountry.name} ثبت نشده است`
-              : 'هنوز آگهی‌ای ثبت نشده است'
+              ? `هنوز کسب‌وکاری در ${selectedCountry.name} ثبت نشده است`
+              : 'هنوز کسب‌وکاری ثبت نشده است'
             }
           </div>
         ) : (

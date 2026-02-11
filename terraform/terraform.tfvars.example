@@ -26,6 +26,11 @@ ecs_cpu           = 512
 ecs_memory        = 1024
 ecs_desired_count = 1
 
+# Twilio (for phone verification)
+# twilio_account_sid   = ""
+# twilio_auth_token    = ""
+# twilio_messaging_sid = ""
+
 # VPC Configuration
 vpc_cidr           = "10.0.0.0/16"
 availability_zones = ["us-east-1a", "us-east-1b"]

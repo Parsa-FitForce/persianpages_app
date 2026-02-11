@@ -170,6 +170,18 @@ resource "aws_ecs_task_definition" "api" {
         {
           name      = "GOOGLE_CLIENT_SECRET"
           valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:GOOGLE_CLIENT_SECRET::"
+        },
+        {
+          name      = "TWILIO_ACCOUNT_SID"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:TWILIO_ACCOUNT_SID::"
+        },
+        {
+          name      = "TWILIO_AUTH_TOKEN"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:TWILIO_AUTH_TOKEN::"
+        },
+        {
+          name      = "TWILIO_MESSAGING_SID"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:TWILIO_MESSAGING_SID::"
         }
       ]
 

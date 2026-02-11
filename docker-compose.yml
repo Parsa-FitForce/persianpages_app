@@ -28,6 +28,10 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       PORT: 5001
       CLIENT_URL: http://localhost:3000
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+      TWILIO_MESSAGING_SID: ${TWILIO_MESSAGING_SID:-}
     ports:
       - "5001:5001"
     volumes:
@@ -45,6 +49,7 @@ services:
     container_name: persianpages_client
     environment:
       VITE_API_URL: http://localhost:5001/api
+      VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY}
     ports:
       - "3000:3000"
     volumes:

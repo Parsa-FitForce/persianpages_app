@@ -19,13 +19,13 @@ export default function Dashboard() {
   }, []);
 
   const handleDelete = async (id: string) => {
-    if (!confirm('آیا از حذف این آگهی اطمینان دارید؟')) return;
+    if (!confirm('آیا از حذف این کسب‌وکار اطمینان دارید؟')) return;
 
     try {
       await listingsApi.delete(id);
       setListings((prev) => prev.filter((l) => l.id !== id));
     } catch (err) {
-      alert('خطا در حذف آگهی');
+      alert('خطا در حذف کسب‌وکار');
     }
   };
 
@@ -37,20 +37,20 @@ export default function Dashboard() {
           <p className="text-gray-600">خوش آمدید، {user?.name}</p>
         </div>
         <Link to="/listings/new" className="btn-primary">
-          ثبت آگهی جدید
+          افزودن کسب‌وکار
         </Link>
       </div>
 
       <div className="card">
         <div className="p-4 border-b border-gray-100">
-          <h2 className="font-semibold">آگهی‌های من</h2>
+          <h2 className="font-semibold">کسب‌وکارهای من</h2>
         </div>
 
         {loading ? (
           <div className="p-8 text-center text-gray-500">در حال بارگذاری...</div>
         ) : listings.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
-            هنوز آگهی‌ای ثبت نکرده‌اید
+            هنوز کسب‌وکاری ثبت نکرده‌اید
           </div>
         ) : (
           <div className="divide-y divide-gray-100">

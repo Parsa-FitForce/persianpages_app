@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { scrapedBusinesses } from './seed-data';
 
 const prisma = new PrismaClient();
 
@@ -139,9 +140,9 @@ async function main() {
     },
   });
 
-  console.log('Seeding sample listings...');
+  console.log('Seeding sample listings (user-created)...');
 
-  // Create sample listings
+  // Create sample listings (owned by demo user)
   for (const listing of sampleListings) {
     const categoryId = categoryMap[listing.categorySlug];
     if (!categoryId) continue;
@@ -164,11 +165,59 @@ async function main() {
         photos: listing.photos,
         userId: demoUser.id,
         categoryId,
+        source: 'user',
+        isClaimed: true,
+        claimedAt: new Date(),
+      },
+    });
+  }
+
+  console.log('Seeding scraped businesses (unclaimed)...');
+
+  // Create scraped business listings (no owner, unclaimed)
+  for (let i = 0; i < scrapedBusinesses.length; i++) {
+    const biz = scrapedBusinesses[i];
+    const categoryId = categoryMap[biz.categorySlug];
+    if (!categoryId) continue;
+
+    const seedId = `scraped-${biz.titleEn.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+
+    await prisma.listing.upsert({
+      where: { id: seedId },
+      update: {
+        title: biz.title,
+        description: biz.description,
+        phone: biz.phone || null,
+        address: biz.address,
+        city: biz.city,
+        country: biz.country,
+        website: biz.website || null,
+        socialLinks: biz.socialLinks || undefined,
+      },
+      create: {
+        id: seedId,
+        title: biz.title,
+        description: biz.description,
+        phone: biz.phone || null,
+        address: biz.address,
+        city: biz.city,
+        country: biz.country,
+        website: biz.website || null,
+        socialLinks: biz.socialLinks || undefined,
+        photos: [],
+        userId: null,
+        categoryId,
+        source: 'scraped',
+        isClaimed: false,
+        claimedAt: null,
       },
     });
   }
 
   console.log('Seeding complete!');
+  console.log(`  - ${categories.length} categories`);
+  console.log(`  - ${sampleListings.length} sample listings (claimed by demo user)`);
+  console.log(`  - ${scrapedBusinesses.length} scraped listings (unclaimed)`);
   console.log('Demo account: demo@persianpages.com / demo123');
 }
 

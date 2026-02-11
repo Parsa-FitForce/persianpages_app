@@ -20,6 +20,9 @@ export interface Listing {
   address: string;
   city: string;
   country: string;
+  latitude?: number;
+  longitude?: number;
+  placeId?: string;
   website?: string;
   socialLinks?: {
     instagram?: string;
@@ -31,10 +34,13 @@ export interface Listing {
   };
   photos: string[];
   isActive: boolean;
+  source: string;
+  isClaimed: boolean;
+  claimedAt?: string;
   createdAt: string;
   updatedAt: string;
-  userId: string;
-  user: { id: string; name: string };
+  userId?: string;
+  user?: { id: string; name: string };
   categoryId: string;
   category: Category;
 }

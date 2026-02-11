@@ -15,7 +15,8 @@ model User {
   googleId  String?   @unique
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-  listings  Listing[]
+  listings           Listing[]
+  phoneVerifications PhoneVerification[]
 }
 
 model Category {
@@ -35,16 +36,22 @@ model Listing {
   address       String
   city          String
   country       String
+  latitude      Float?
+  longitude     Float?
+  placeId       String?
   website       String?
   socialLinks   Json?
   businessHours Json?
   photos        String[]
   isActive      Boolean  @default(true)
+  source        String   @default("user") // "user" or "scraped"
+  isClaimed     Boolean  @default(true)
+  claimedAt     DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
@@ -53,4 +60,24 @@ model Listing {
   @@index([city])
   @@index([country])
   @@index([categoryId])
+  @@index([isClaimed])
+}
+
+model PhoneVerification {
+  id        String   @id @default(cuid())
+  phone     String
+  code      String
+  channel   String   @default("sms") // "sms" or "call"
+  attempts  Int      @default(0)
+  verified  Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  listingId String?
+
+  @@index([userId])
+  @@index([phone])
 }

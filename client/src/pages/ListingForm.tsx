@@ -1,16 +1,24 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { GoogleMap, MarkerF } from '@react-google-maps/api';
 import { categoriesApi, listingsApi, uploadApi } from '../services/api';
+import OtpVerifyModal from '../components/OtpVerifyModal';
 import type { Category } from '../types';
 import { countries, searchCities, getCountryByCode, type Country, type City } from '../i18n/locations';
 import { resolveImageUrl } from '../utils/image';
+import { useGoogleMaps } from '../hooks/useGoogleMaps';
+import AddressAutocomplete from '../components/AddressAutocomplete';
 
 export default function ListingForm() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  const { isLoaded } = useGoogleMaps();
 
   const [categories, setCategories] = useState<Category[]>([]);
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [placeId, setPlaceId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showCountryList, setShowCountryList] = useState(false);
@@ -64,6 +72,9 @@ export default function ListingForm() {
           photos: l.photos.length > 0 ? l.photos : [],
           isActive: l.isActive,
         });
+        if (l.latitude != null) setLatitude(l.latitude);
+        if (l.longitude != null) setLongitude(l.longitude);
+        if (l.placeId) setPlaceId(l.placeId);
         // Find country code from name
         const foundCountry = countries.find(c => c.name === l.country);
         if (foundCountry) setSelectedCountryCode(foundCountry.code);
@@ -112,6 +123,21 @@ export default function ListingForm() {
     setShowCityList(false);
   };
 
+  const handleAddressPlaceSelect = useCallback(
+    (address: string, lat: number, lng: number, pid: string) => {
+      setForm((prev) => ({ ...prev, address }));
+      setLatitude(lat);
+      setLongitude(lng);
+      setPlaceId(pid);
+    },
+    []
+  );
+
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [verificationToken, setVerificationToken] = useState('');
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [pendingSubmit, setPendingSubmit] = useState(false);
+
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -153,12 +179,11 @@ export default function ListingForm() {
     }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitForm = async (token?: string) => {
     setError('');
     setLoading(true);
 
-    const data = {
+    const data: any = {
       title: form.title,
       description: form.description,
       categoryId: form.categoryId,
@@ -174,7 +199,14 @@ export default function ListingForm() {
       },
       photos: form.photos.filter((p) => p.trim()),
       isActive: form.isActive,
+      latitude: latitude || undefined,
+      longitude: longitude || undefined,
+      placeId: placeId || undefined,
     };
+
+    if (!isEdit && token) {
+      data.verificationToken = token;
+    }
 
     try {
       if (isEdit && id) {
@@ -184,16 +216,46 @@ export default function ListingForm() {
       }
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'خطا در ذخیره آگهی');
+      setError(err.response?.data?.error || 'خطا در ذخیره کسب‌وکار');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    // For new listings, require phone verification
+    if (!isEdit && !verificationToken) {
+      if (!form.phone) {
+        setError('شماره تلفن الزامی است');
+        return;
+      }
+      setPendingSubmit(true);
+      setShowOtpModal(true);
+      return;
+    }
+
+    await submitForm(verificationToken);
+  };
+
+  const handlePhoneVerified = async (token: string) => {
+    setVerificationToken(token);
+    setPhoneVerified(true);
+    setShowOtpModal(false);
+
+    // Auto-submit if we were waiting for verification
+    if (pendingSubmit) {
+      setPendingSubmit(false);
+      await submitForm(token);
     }
   };
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-8">
-        {isEdit ? 'ویرایش آگهی' : 'ثبت آگهی جدید'}
+        {isEdit ? 'ویرایش کسب‌وکار' : 'افزودن کسب‌وکار'}
       </h1>
 
       {error && (
@@ -333,16 +395,27 @@ export default function ListingForm() {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               آدرس *
             </label>
-            <input
-              type="text"
-              name="address"
+            <AddressAutocomplete
               value={form.address}
-              onChange={handleChange}
-              className="input"
-              placeholder="خیابان، پلاک، واحد"
-              required
+              onChange={(val) => setForm((prev) => ({ ...prev, address: val }))}
+              onPlaceSelect={handleAddressPlaceSelect}
+              countryCode={selectedCountryCode}
+              isLoaded={isLoaded}
             />
           </div>
+
+          {latitude && longitude && isLoaded && (
+            <div className="rounded-xl overflow-hidden border border-gray-200" style={{ height: 200 }}>
+              <GoogleMap
+                center={{ lat: latitude, lng: longitude }}
+                zoom={15}
+                mapContainerStyle={{ width: '100%', height: '100%' }}
+                options={{ disableDefaultUI: true, zoomControl: true }}
+              >
+                <MarkerF position={{ lat: latitude, lng: longitude }} />
+              </GoogleMap>
+            </div>
+          )}
         </div>
 
         {/* Contact */}
@@ -352,16 +425,29 @@ export default function ListingForm() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                تلفن
+                تلفن {!isEdit && '*'}
+                {phoneVerified && !isEdit && (
+                  <span className="text-green-600 text-xs mr-2">
+                    (تایید شده)
+                  </span>
+                )}
               </label>
               <input
                 type="tel"
                 name="phone"
                 value={form.phone}
-                onChange={handleChange}
+                onChange={(e) => {
+                  handleChange(e);
+                  // Reset verification if phone changes
+                  if (!isEdit && phoneVerified) {
+                    setPhoneVerified(false);
+                    setVerificationToken('');
+                  }
+                }}
                 className="input text-left"
                 dir="ltr"
                 placeholder="+1 234 567 8900"
+                required={!isEdit}
               />
             </div>
             <div>
@@ -522,7 +608,7 @@ export default function ListingForm() {
                 onChange={handleChange}
                 className="w-5 h-5 text-primary-600 rounded"
               />
-              <span>آگهی فعال باشد</span>
+              <span>کسب‌وکار فعال باشد</span>
             </label>
           </div>
         )}
@@ -534,7 +620,7 @@ export default function ListingForm() {
             disabled={loading}
             className="btn-primary flex-1 disabled:opacity-50"
           >
-            {loading ? 'در حال ذخیره...' : isEdit ? 'ذخیره تغییرات' : 'ثبت آگهی'}
+            {loading ? 'در حال ذخیره...' : isEdit ? 'ذخیره تغییرات' : 'افزودن کسب‌وکار'}
           </button>
           <button
             type="button"
@@ -545,6 +631,17 @@ export default function ListingForm() {
           </button>
         </div>
       </form>
+
+      <OtpVerifyModal
+        isOpen={showOtpModal}
+        onClose={() => {
+          setShowOtpModal(false);
+          setPendingSubmit(false);
+        }}
+        onVerified={handlePhoneVerified}
+        phone={form.phone}
+        mode="create"
+      />
     </div>
   );
 }

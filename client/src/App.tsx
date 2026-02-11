@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import Header from './components/Header';
+import Footer from './components/Footer';
 import Home from './pages/Home';
 import Search from './pages/Search';
 import Login from './pages/Login';
@@ -10,6 +11,8 @@ import Dashboard from './pages/Dashboard';
 import ListingDetail from './pages/ListingDetail';
 import ListingForm from './pages/ListingForm';
 import SelectCountry from './pages/SelectCountry';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import Terms from './pages/Terms';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -83,6 +86,8 @@ export default function App() {
                     }
                   />
                   <Route path="/auth/callback" element={<AuthCallback />} />
+                  <Route path="/privacy" element={<PrivacyPolicy />} />
+                  <Route path="/terms" element={<Terms />} />
 
                   <Route
                     path="/dashboard"
@@ -112,6 +117,7 @@ export default function App() {
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </main>
+              <Footer />
             </>
           }
         />

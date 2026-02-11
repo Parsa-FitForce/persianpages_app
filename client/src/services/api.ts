@@ -48,12 +48,28 @@ export const listingsApi = {
 
   getMine: () => api.get<Listing[]>('/listings/user/me'),
 
-  create: (data: Partial<Listing>) => api.post<Listing>('/listings', data),
+  create: (data: Partial<Listing> & { verificationToken?: string }) =>
+    api.post<Listing>('/listings', data),
 
   update: (id: string, data: Partial<Listing>) =>
     api.put<Listing>(`/listings/${id}`, data),
 
   delete: (id: string) => api.delete(`/listings/${id}`),
+
+  claim: (id: string, verificationToken: string) =>
+    api.post<Listing>(`/listings/${id}/claim`, { verificationToken }),
+};
+
+// Phone Verification
+export const verificationApi = {
+  getPhoneHint: (listingId: string) =>
+    api.get<{ maskedPhone: string }>(`/verification/phone-hint/${listingId}`),
+
+  sendOtp: (data: { phone: string; channel: 'sms' | 'call'; listingId?: string }) =>
+    api.post<{ message: string; expiresAt: string }>('/verification/send', data),
+
+  confirmOtp: (data: { phone: string; code: string }) =>
+    api.post<{ verificationToken: string }>('/verification/confirm', data),
 };
 
 // Upload

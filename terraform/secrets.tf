@@ -19,6 +19,9 @@ resource "aws_secretsmanager_secret_version" "app_secrets" {
     JWT_SECRET           = var.jwt_secret
     GOOGLE_CLIENT_ID     = var.google_client_id
     GOOGLE_CLIENT_SECRET = var.google_client_secret
+    TWILIO_ACCOUNT_SID   = var.twilio_account_sid
+    TWILIO_AUTH_TOKEN     = var.twilio_auth_token
+    TWILIO_MESSAGING_SID  = var.twilio_messaging_sid
   })
 }
 
