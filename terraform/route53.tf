@@ -76,3 +76,13 @@ resource "aws_route53_record" "twilio_verification" {
 
   records = [var.twilio_domain_verification]
 }
+
+# Google Search Console verification TXT record
+resource "aws_route53_record" "google_site_verification" {
+  zone_id = data.aws_route53_zone.main.zone_id
+  name    = var.domain_name
+  type    = "TXT"
+  ttl     = 300
+
+  records = ["google-site-verification=HCiSGKv9dqWadycBFYEZRkVPwUTgZAEa7d0FfiDZdH0"]
+}
