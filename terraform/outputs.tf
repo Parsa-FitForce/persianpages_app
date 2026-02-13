@@ -40,7 +40,7 @@ output "deployment_summary" {
   description = "Summary of deployed resources"
   value = {
     frontend_url      = var.domain_name != "" ? "https://${var.domain_name}" : "https://${aws_cloudfront_distribution.frontend.domain_name}"
-    api_url           = var.acm_certificate_arn != "" ? "https://${aws_lb.api.dns_name}" : "http://${aws_lb.api.dns_name}"
+    api_url           = var.domain_name != "" ? "https://api.${var.domain_name}" : "http://${aws_lb.api.dns_name}"
     ecr_repository    = aws_ecr_repository.backend.repository_url
     s3_bucket         = aws_s3_bucket.frontend.id
     cloudfront_id     = aws_cloudfront_distribution.frontend.id

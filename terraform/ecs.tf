@@ -151,6 +151,10 @@ resource "aws_ecs_task_definition" "api" {
         {
           name  = "S3_UPLOADS_REGION"
           value = var.aws_region
+        },
+        {
+          name  = "GOOGLE_CALLBACK_URL"
+          value = var.domain_name != "" ? "https://api.${var.domain_name}/api/auth/google/callback" : ""
         }
       ]
 
