@@ -27,11 +27,9 @@ fi
 echo "Syncing database schema..."
 npx prisma db push --skip-generate
 
-# Seed database (only if needed)
-if [ "$SEED_DATABASE" = "true" ]; then
-    echo "Seeding database..."
-    npm run db:seed
-fi
+# Seed database (idempotent - uses upsert)
+echo "Seeding database..."
+node prisma/seed.js
 
 echo "Starting server..."
 exec npm start

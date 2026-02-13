@@ -111,6 +111,7 @@ jobs:
         working-directory: client
         env:
           VITE_API_URL: ${{ secrets.API_URL }}
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
         run: npm run build
 
       - name: Configure AWS credentials
