@@ -11,6 +11,7 @@ terraform/*.tfstate.*
 terraform/.terraform.lock.hcl
 terraform/terraform.tfvars
 terraform/*.tfplan
+terraform/tfplan
 
 # Uploads
 server/uploads/
