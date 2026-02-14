@@ -2,8 +2,12 @@ User-agent: *
 Allow: /
 Disallow: /dashboard
 Disallow: /listings/new
+Disallow: /listings/*/edit
 Disallow: /login
 Disallow: /register
 Disallow: /auth/callback
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-email
 
-Sitemap: /sitemap.xml
+Sitemap: https://persianpages.com/sitemap.xml

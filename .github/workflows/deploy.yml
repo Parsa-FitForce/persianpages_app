@@ -24,6 +24,7 @@ env:
   ECS_SERVICE: persianpages-prod-api
   S3_BUCKET: ${{ secrets.S3_BUCKET_NAME }}
   CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+  LAMBDA_FUNCTION_NAME: persianpages-prod-seo-prerender
 
 jobs:
   build-and-push-backend:
@@ -114,6 +115,11 @@ jobs:
           VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
         run: npm run build
 
+      - name: Generate sitemap
+        run: node client/scripts/generate-sitemap.mjs
+        env:
+          API_URL: ${{ secrets.API_URL }}
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -132,20 +138,47 @@ jobs:
             --distribution-id $CLOUDFRONT_DISTRIBUTION_ID \
             --paths "/*"
 
+  deploy-lambda-edge:
+    name: Deploy Lambda@Edge SEO
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' || inputs.deploy_frontend }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Package and deploy Lambda
+        run: |
+          cd lambda/seo-prerender
+          zip -r ../../function.zip .
+          cd ../..
+          aws lambda update-function-code \
+            --function-name $LAMBDA_FUNCTION_NAME \
+            --zip-file fileb://function.zip \
+            --publish
+
   notify:
     name: Notify Deployment Status
     runs-on: ubuntu-latest
-    needs: [build-and-push-backend, deploy-backend, build-and-deploy-frontend]
+    needs: [build-and-push-backend, deploy-backend, build-and-deploy-frontend, deploy-lambda-edge]
     if: always()
 
     steps:
       - name: Check deployment status
         run: |
-          if [ "${{ needs.deploy-backend.result }}" == "success" ] && [ "${{ needs.build-and-deploy-frontend.result }}" == "success" ]; then
+          if [ "${{ needs.deploy-backend.result }}" == "success" ] && [ "${{ needs.build-and-deploy-frontend.result }}" == "success" ] && [ "${{ needs.deploy-lambda-edge.result }}" != "failure" ]; then
             echo "✅ Deployment successful!"
           else
             echo "❌ Deployment had issues"
             echo "Backend: ${{ needs.deploy-backend.result }}"
             echo "Frontend: ${{ needs.build-and-deploy-frontend.result }}"
+            echo "Lambda@Edge: ${{ needs.deploy-lambda-edge.result }}"
             exit 1
           fi
