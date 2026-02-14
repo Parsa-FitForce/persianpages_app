@@ -4,10 +4,53 @@ import { GoogleMap, MarkerF } from '@react-google-maps/api';
 import { categoriesApi, listingsApi, uploadApi } from '../services/api';
 import OtpVerifyModal from '../components/OtpVerifyModal';
 import type { Category } from '../types';
-import { countries, searchCities, getCountryByCode, type Country, type City } from '../i18n/locations';
+import { countries, cities, searchCities, getCountryByCode, type Country, type City } from '../i18n/locations';
 import { resolveImageUrl } from '../utils/image';
 import { useGoogleMaps } from '../hooks/useGoogleMaps';
 import AddressAutocomplete from '../components/AddressAutocomplete';
+import { AsYouType, parsePhoneNumberFromString, isValidPhoneNumber } from 'libphonenumber-js';
+
+function formatPhoneNumber(raw: string, countryCode: string): string {
+  // Strip non-digit/+ chars for processing
+  const digits = raw.replace(/[^\d+]/g, '');
+  if (!digits) return '';
+  const formatter = new AsYouType(countryCode.toUpperCase() as any);
+  return formatter.input(digits);
+}
+
+function stripPhoneForStorage(formatted: string): string {
+  const parsed = parsePhoneNumberFromString(formatted);
+  if (parsed && parsed.isValid()) return parsed.format('E.164');
+  // If it's just a dial code or empty, return empty
+  const digits = formatted.replace(/[^\d+]/g, '');
+  if (!digits || /^\+\d{1,3}$/.test(digits)) return '';
+  return digits;
+}
+
+function extractSocialUsername(value: string): string {
+  let v = value.trim();
+  // Strip common URL prefixes
+  for (const prefix of [
+    'https://www.instagram.com/', 'https://instagram.com/', 'http://instagram.com/',
+    'https://www.telegram.me/', 'https://telegram.me/', 'https://t.me/', 'http://t.me/',
+    'https://www.t.me/',
+  ]) {
+    if (v.toLowerCase().startsWith(prefix)) {
+      v = v.slice(prefix.length);
+      break;
+    }
+  }
+  // Strip leading @ and trailing /
+  v = v.replace(/^@/, '').replace(/\/+$/, '');
+  return v;
+}
+
+function ensureHttps(url: string): string {
+  const v = url.trim();
+  if (!v) return v;
+  if (/^https?:\/\//i.test(v)) return v;
+  return 'https://' + v;
+}
 
 export default function ListingForm() {
   const { id } = useParams<{ id: string }>();
@@ -24,6 +67,8 @@ export default function ListingForm() {
   const [showCountryList, setShowCountryList] = useState(false);
   const [showCityList, setShowCityList] = useState(false);
   const [selectedCountryCode, setSelectedCountryCode] = useState<string>('');
+  const [countrySearch, setCountrySearch] = useState('');
+  const [citySearch, setCitySearch] = useState('');
 
   const [form, setForm] = useState({
     title: '',
@@ -77,22 +122,35 @@ export default function ListingForm() {
         if (l.placeId) setPlaceId(l.placeId);
         // Find country code from name
         const foundCountry = countries.find(c => c.name === l.country);
-        if (foundCountry) setSelectedCountryCode(foundCountry.code);
+        if (foundCountry) {
+          setSelectedCountryCode(foundCountry.code);
+          // Re-format stored phone numbers for display
+          if (l.phone) {
+            setForm(prev => ({ ...prev, phone: formatPhoneNumber(l.phone, foundCountry.code) }));
+          }
+          if (l.socialLinks?.whatsapp) {
+            setForm(prev => ({ ...prev, whatsapp: formatPhoneNumber(l.socialLinks.whatsapp, foundCountry.code) }));
+          }
+        }
       });
     }
   }, [id, isEdit]);
 
   const filteredCountries = useMemo(() => {
-    if (!form.country) return countries;
-    const query = form.country.toLowerCase();
+    if (!countrySearch) return countries;
+    const query = countrySearch.toLowerCase();
     return countries.filter(
-      (c) => c.name.includes(form.country) || c.nameEn.toLowerCase().includes(query)
+      (c) => c.name.includes(countrySearch) || c.nameEn.toLowerCase().includes(query)
     );
-  }, [form.country]);
+  }, [countrySearch]);
 
   const availableCities = useMemo(() => {
-    return searchCities(form.city, selectedCountryCode || undefined);
-  }, [form.city, selectedCountryCode]);
+    return searchCities(citySearch, selectedCountryCode || undefined);
+  }, [citySearch, selectedCountryCode]);
+
+  const selectedCountry = useMemo(() => {
+    return selectedCountryCode ? getCountryByCode(selectedCountryCode) : undefined;
+  }, [selectedCountryCode]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -107,12 +165,21 @@ export default function ListingForm() {
   const handleCountrySelect = (country: Country) => {
     setForm((prev) => ({ ...prev, country: country.name, city: '' }));
     setSelectedCountryCode(country.code);
+    setCountrySearch('');
+    setCitySearch('');
     setShowCountryList(false);
+  };
+
+  const clearCountry = () => {
+    setForm((prev) => ({ ...prev, country: '', city: '' }));
+    setSelectedCountryCode('');
+    setCountrySearch('');
+    setCitySearch('');
   };
 
   const handleCitySelect = (city: City) => {
     setForm((prev) => ({ ...prev, city: city.name }));
-    // Also set country if not already set
+    setCitySearch('');
     if (!form.country) {
       const country = getCountryByCode(city.country);
       if (country) {
@@ -121,6 +188,50 @@ export default function ListingForm() {
       }
     }
     setShowCityList(false);
+  };
+
+  const clearCity = () => {
+    setForm((prev) => ({ ...prev, city: '' }));
+    setCitySearch('');
+  };
+
+  const handleCountryBlur = () => {
+    setTimeout(() => {
+      setShowCountryList(false);
+      setCountrySearch('');
+    }, 200);
+  };
+
+  const handleCityBlur = () => {
+    setTimeout(() => {
+      setShowCityList(false);
+      setCitySearch('');
+    }, 200);
+  };
+
+  const handlePhoneFocus = (field: 'phone' | 'whatsapp') => {
+    if (!form[field] && selectedCountry) {
+      setForm((prev) => ({ ...prev, [field]: selectedCountry.dialCode + ' ' }));
+    }
+  };
+
+  const handlePhoneInput = (value: string, field: 'phone' | 'whatsapp') => {
+    const formatted = formatPhoneNumber(value, selectedCountryCode);
+    setForm((prev) => ({ ...prev, [field]: formatted }));
+    if (field === 'phone' && !isEdit && phoneVerified) {
+      setPhoneVerified(false);
+      setVerificationToken('');
+    }
+  };
+
+  const handleSocialInput = (value: string, field: 'instagram' | 'telegram') => {
+    setForm((prev) => ({ ...prev, [field]: extractSocialUsername(value) }));
+  };
+
+  const handleWebsiteBlur = () => {
+    if (form.website) {
+      setForm((prev) => ({ ...prev, website: ensureHttps(prev.website) }));
+    }
   };
 
   const handleAddressPlaceSelect = useCallback(
@@ -181,13 +292,47 @@ export default function ListingForm() {
 
   const submitForm = async (token?: string) => {
     setError('');
+
+    // Validate country/city against known values
+    const validCountry = countries.find(c => c.name === form.country);
+    if (!validCountry) {
+      setError('لطفا کشور را از لیست انتخاب کنید');
+      return;
+    }
+    const validCity = cities.find(c => c.name === form.city && c.country === validCountry.code);
+    if (!validCity) {
+      setError('لطفا شهر را از لیست انتخاب کنید');
+      return;
+    }
+
+    // Validate phone number
+    const phoneDigits = form.phone.replace(/\s/g, '');
+    if (phoneDigits && phoneDigits !== validCountry.dialCode) {
+      if (!isValidPhoneNumber(phoneDigits)) {
+        setError('شماره تلفن وارد شده معتبر نیست');
+        return;
+      }
+    } else if (!isEdit) {
+      setError('شماره تلفن الزامی است');
+      return;
+    }
+
+    // Validate whatsapp if provided
+    const waDigits = form.whatsapp.replace(/\s/g, '');
+    if (waDigits && waDigits !== validCountry.dialCode) {
+      if (!isValidPhoneNumber(waDigits)) {
+        setError('شماره واتساپ وارد شده معتبر نیست');
+        return;
+      }
+    }
+
     setLoading(true);
 
     const data: any = {
       title: form.title,
       description: form.description,
       categoryId: form.categoryId,
-      phone: form.phone || undefined,
+      phone: stripPhoneForStorage(form.phone) || undefined,
       address: form.address,
       city: form.city,
       country: form.country,
@@ -195,7 +340,7 @@ export default function ListingForm() {
       socialLinks: {
         instagram: form.instagram || undefined,
         telegram: form.telegram || undefined,
-        whatsapp: form.whatsapp || undefined,
+        whatsapp: stripPhoneForStorage(form.whatsapp) || undefined,
       },
       photos: form.photos.filter((p) => p.trim()),
       isActive: form.isActive,
@@ -323,23 +468,47 @@ export default function ListingForm() {
           <h2 className="font-semibold">موقعیت مکانی</h2>
 
           <div className="grid grid-cols-2 gap-4">
-            {/* Country with autocomplete */}
+            {/* Country with strict searchable dropdown */}
             <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 کشور *
               </label>
-              <input
-                type="text"
-                name="country"
-                value={form.country}
-                onChange={handleChange}
-                onFocus={() => setShowCountryList(true)}
-                onBlur={() => setTimeout(() => setShowCountryList(false), 200)}
-                className="input"
-                placeholder="نام کشور را تایپ کنید"
-                autoComplete="off"
-                required
-              />
+              <div className="relative">
+                {showCountryList ? (
+                  <input
+                    type="text"
+                    value={countrySearch}
+                    onChange={(e) => setCountrySearch(e.target.value)}
+                    onBlur={handleCountryBlur}
+                    className="input"
+                    placeholder="جستجوی کشور..."
+                    autoComplete="off"
+                    autoFocus
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowCountryList(true)}
+                    className="input w-full text-right flex items-center justify-between"
+                  >
+                    <span className={form.country ? 'text-gray-900' : 'text-gray-400'}>
+                      {form.country ? `${selectedCountry?.flag || ''} ${form.country}` : 'انتخاب کشور'}
+                    </span>
+                    {form.country ? (
+                      <span
+                        onClick={(e) => { e.stopPropagation(); clearCountry(); }}
+                        className="text-gray-400 hover:text-gray-600 px-1"
+                      >
+                        ✕
+                      </span>
+                    ) : (
+                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    )}
+                  </button>
+                )}
+              </div>
               {showCountryList && filteredCountries.length > 0 && (
                 <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-lg mt-1 max-h-48 overflow-y-auto shadow-lg">
                   {filteredCountries.map((c) => (
@@ -355,25 +524,50 @@ export default function ListingForm() {
                   ))}
                 </ul>
               )}
+              <input type="hidden" name="country" value={form.country} required />
             </div>
 
-            {/* City with autocomplete */}
+            {/* City with strict searchable dropdown */}
             <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 شهر *
               </label>
-              <input
-                type="text"
-                name="city"
-                value={form.city}
-                onChange={handleChange}
-                onFocus={() => setShowCityList(true)}
-                onBlur={() => setTimeout(() => setShowCityList(false), 200)}
-                className="input"
-                placeholder="نام شهر را تایپ کنید"
-                autoComplete="off"
-                required
-              />
+              <div className="relative">
+                {showCityList ? (
+                  <input
+                    type="text"
+                    value={citySearch}
+                    onChange={(e) => setCitySearch(e.target.value)}
+                    onBlur={handleCityBlur}
+                    className="input"
+                    placeholder="جستجوی شهر..."
+                    autoComplete="off"
+                    autoFocus
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowCityList(true)}
+                    className="input w-full text-right flex items-center justify-between"
+                  >
+                    <span className={form.city ? 'text-gray-900' : 'text-gray-400'}>
+                      {form.city || 'انتخاب شهر'}
+                    </span>
+                    {form.city ? (
+                      <span
+                        onClick={(e) => { e.stopPropagation(); clearCity(); }}
+                        className="text-gray-400 hover:text-gray-600 px-1"
+                      >
+                        ✕
+                      </span>
+                    ) : (
+                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    )}
+                  </button>
+                )}
+              </div>
               {showCityList && availableCities.length > 0 && (
                 <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-lg mt-1 max-h-48 overflow-y-auto shadow-lg">
                   {availableCities.map((city) => (
@@ -388,6 +582,7 @@ export default function ListingForm() {
                   ))}
                 </ul>
               )}
+              <input type="hidden" name="city" value={form.city} required />
             </div>
           </div>
 
@@ -436,17 +631,11 @@ export default function ListingForm() {
                 type="tel"
                 name="phone"
                 value={form.phone}
-                onChange={(e) => {
-                  handleChange(e);
-                  // Reset verification if phone changes
-                  if (!isEdit && phoneVerified) {
-                    setPhoneVerified(false);
-                    setVerificationToken('');
-                  }
-                }}
+                onFocus={() => handlePhoneFocus('phone')}
+                onChange={(e) => handlePhoneInput(e.target.value, 'phone')}
                 className="input text-left"
                 dir="ltr"
-                placeholder="+1 234 567 8900"
+                placeholder={selectedCountry ? `${selectedCountry.dialCode} ...` : '+1 234 567 8900'}
                 required={!isEdit}
               />
             </div>
@@ -459,6 +648,7 @@ export default function ListingForm() {
                 name="website"
                 value={form.website}
                 onChange={handleChange}
+                onBlur={handleWebsiteBlur}
                 className="input text-left"
                 dir="ltr"
                 placeholder="https://"
@@ -480,7 +670,7 @@ export default function ListingForm() {
                 type="text"
                 name="instagram"
                 value={form.instagram}
-                onChange={handleChange}
+                onChange={(e) => handleSocialInput(e.target.value, 'instagram')}
                 className="input text-left"
                 dir="ltr"
                 placeholder="username"
@@ -494,7 +684,7 @@ export default function ListingForm() {
                 type="text"
                 name="telegram"
                 value={form.telegram}
-                onChange={handleChange}
+                onChange={(e) => handleSocialInput(e.target.value, 'telegram')}
                 className="input text-left"
                 dir="ltr"
                 placeholder="username"
@@ -505,13 +695,14 @@ export default function ListingForm() {
                 واتساپ
               </label>
               <input
-                type="text"
+                type="tel"
                 name="whatsapp"
                 value={form.whatsapp}
-                onChange={handleChange}
+                onFocus={() => handlePhoneFocus('whatsapp')}
+                onChange={(e) => handlePhoneInput(e.target.value, 'whatsapp')}
                 className="input text-left"
                 dir="ltr"
-                placeholder="+1234567890"
+                placeholder={selectedCountry ? `${selectedCountry.dialCode} ...` : '+1 234 567 890'}
               />
             </div>
           </div>
@@ -639,7 +830,7 @@ export default function ListingForm() {
           setPendingSubmit(false);
         }}
         onVerified={handlePhoneVerified}
-        phone={form.phone}
+        phone={stripPhoneForStorage(form.phone)}
         mode="create"
       />
     </div>

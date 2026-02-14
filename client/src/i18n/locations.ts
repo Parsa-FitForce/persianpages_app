@@ -7,29 +7,30 @@ export interface Country {
   nameEn: string;
   flag: string;
   population: string; // Approximate Iranian population
+  dialCode: string;
 }
 
 export const countries: Country[] = [
-  { code: 'us', name: 'آمریکا', nameEn: 'United States', flag: '🇺🇸', population: '~600,000' },
-  { code: 'ca', name: 'کانادا', nameEn: 'Canada', flag: '🇨🇦', population: '~400,000' },
-  { code: 'de', name: 'آلمان', nameEn: 'Germany', flag: '🇩🇪', population: '~320,000' },
-  { code: 'ae', name: 'امارات', nameEn: 'UAE', flag: '🇦🇪', population: '~300,000' },
-  { code: 'tr', name: 'ترکیه', nameEn: 'Turkey', flag: '🇹🇷', population: '~200,000' },
-  { code: 'gb', name: 'انگلستان', nameEn: 'United Kingdom', flag: '🇬🇧', population: '~150,000' },
-  { code: 'se', name: 'سوئد', nameEn: 'Sweden', flag: '🇸🇪', population: '~120,000' },
-  { code: 'au', name: 'استرالیا', nameEn: 'Australia', flag: '🇦🇺', population: '~100,000' },
-  { code: 'fr', name: 'فرانسه', nameEn: 'France', flag: '🇫🇷', population: '~60,000' },
-  { code: 'nl', name: 'هلند', nameEn: 'Netherlands', flag: '🇳🇱', population: '~50,000' },
-  { code: 'at', name: 'اتریش', nameEn: 'Austria', flag: '🇦🇹', population: '~40,000' },
-  { code: 'it', name: 'ایتالیا', nameEn: 'Italy', flag: '🇮🇹', population: '~30,000' },
-  { code: 'es', name: 'اسپانیا', nameEn: 'Spain', flag: '🇪🇸', population: '~25,000' },
-  { code: 'no', name: 'نروژ', nameEn: 'Norway', flag: '🇳🇴', population: '~20,000' },
-  { code: 'dk', name: 'دانمارک', nameEn: 'Denmark', flag: '🇩🇰', population: '~18,000' },
-  { code: 'be', name: 'بلژیک', nameEn: 'Belgium', flag: '🇧🇪', population: '~15,000' },
-  { code: 'ch', name: 'سوئیس', nameEn: 'Switzerland', flag: '🇨🇭', population: '~12,000' },
-  { code: 'nz', name: 'نیوزیلند', nameEn: 'New Zealand', flag: '🇳🇿', population: '~10,000' },
-  { code: 'jp', name: 'ژاپن', nameEn: 'Japan', flag: '🇯🇵', population: '~8,000' },
-  { code: 'my', name: 'مالزی', nameEn: 'Malaysia', flag: '🇲🇾', population: '~7,000' },
+  { code: 'us', name: 'آمریکا', nameEn: 'United States', flag: '🇺🇸', population: '~600,000', dialCode: '+1' },
+  { code: 'ca', name: 'کانادا', nameEn: 'Canada', flag: '🇨🇦', population: '~400,000', dialCode: '+1' },
+  { code: 'de', name: 'آلمان', nameEn: 'Germany', flag: '🇩🇪', population: '~320,000', dialCode: '+49' },
+  { code: 'ae', name: 'امارات', nameEn: 'UAE', flag: '🇦🇪', population: '~300,000', dialCode: '+971' },
+  { code: 'tr', name: 'ترکیه', nameEn: 'Turkey', flag: '🇹🇷', population: '~200,000', dialCode: '+90' },
+  { code: 'gb', name: 'انگلستان', nameEn: 'United Kingdom', flag: '🇬🇧', population: '~150,000', dialCode: '+44' },
+  { code: 'se', name: 'سوئد', nameEn: 'Sweden', flag: '🇸🇪', population: '~120,000', dialCode: '+46' },
+  { code: 'au', name: 'استرالیا', nameEn: 'Australia', flag: '🇦🇺', population: '~100,000', dialCode: '+61' },
+  { code: 'fr', name: 'فرانسه', nameEn: 'France', flag: '🇫🇷', population: '~60,000', dialCode: '+33' },
+  { code: 'nl', name: 'هلند', nameEn: 'Netherlands', flag: '🇳🇱', population: '~50,000', dialCode: '+31' },
+  { code: 'at', name: 'اتریش', nameEn: 'Austria', flag: '🇦🇹', population: '~40,000', dialCode: '+43' },
+  { code: 'it', name: 'ایتالیا', nameEn: 'Italy', flag: '🇮🇹', population: '~30,000', dialCode: '+39' },
+  { code: 'es', name: 'اسپانیا', nameEn: 'Spain', flag: '🇪🇸', population: '~25,000', dialCode: '+34' },
+  { code: 'no', name: 'نروژ', nameEn: 'Norway', flag: '🇳🇴', population: '~20,000', dialCode: '+47' },
+  { code: 'dk', name: 'دانمارک', nameEn: 'Denmark', flag: '🇩🇰', population: '~18,000', dialCode: '+45' },
+  { code: 'be', name: 'بلژیک', nameEn: 'Belgium', flag: '🇧🇪', population: '~15,000', dialCode: '+32' },
+  { code: 'ch', name: 'سوئیس', nameEn: 'Switzerland', flag: '🇨🇭', population: '~12,000', dialCode: '+41' },
+  { code: 'nz', name: 'نیوزیلند', nameEn: 'New Zealand', flag: '🇳🇿', population: '~10,000', dialCode: '+64' },
+  { code: 'jp', name: 'ژاپن', nameEn: 'Japan', flag: '🇯🇵', population: '~8,000', dialCode: '+81' },
+  { code: 'my', name: 'مالزی', nameEn: 'Malaysia', flag: '🇲🇾', population: '~7,000', dialCode: '+60' },
 ];
 
 export interface City {

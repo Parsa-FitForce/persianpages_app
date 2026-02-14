@@ -4,9 +4,10 @@ import { countries, getCountryByCode, type Country } from '../i18n/locations';
 
 interface Props {
   compact?: boolean;
+  showLabel?: boolean;
 }
 
-export default function CountrySelector({ compact = false }: Props) {
+export default function CountrySelector({ compact = false, showLabel = false }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -49,12 +50,12 @@ export default function CountrySelector({ compact = false }: Props) {
           {selectedCountry ? (
             <>
               <span>{selectedCountry.flag}</span>
-              <span className="hidden sm:inline">{selectedCountry.name}</span>
+              <span className={showLabel ? 'inline' : 'hidden sm:inline'}>{selectedCountry.name}</span>
             </>
           ) : (
             <>
               <span>🌍</span>
-              <span className="hidden sm:inline">همه کشورها</span>
+              <span className={showLabel ? 'inline' : 'hidden sm:inline'}>همه کشورها</span>
             </>
           )}
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

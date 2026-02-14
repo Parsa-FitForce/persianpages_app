@@ -94,7 +94,7 @@ export default function Header() {
             <div className="max-w-7xl mx-auto px-4 py-4 space-y-2">
               {/* Country selector */}
               <div className="pb-3 mb-2 border-b border-gray-100">
-                <CountrySelector compact />
+                <CountrySelector compact showLabel />
               </div>
 
               {navLink('/search', 'جستجو', closeMenu)}
