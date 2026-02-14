@@ -155,6 +155,14 @@ resource "aws_ecs_task_definition" "api" {
         {
           name  = "GOOGLE_CALLBACK_URL"
           value = var.domain_name != "" ? "https://api.${var.domain_name}/api/auth/google/callback" : ""
+        },
+        {
+          name  = "SES_FROM_EMAIL"
+          value = "noreply@${var.domain_name}"
+        },
+        {
+          name  = "SES_REGION"
+          value = var.aws_region
         }
       ]
 

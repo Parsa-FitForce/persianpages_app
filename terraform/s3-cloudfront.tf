@@ -61,9 +61,16 @@ resource "aws_cloudfront_distribution" "frontend" {
 
     forwarded_values {
       query_string = false
+      headers      = ["User-Agent"]
       cookies {
         forward = "none"
       }
+    }
+
+    lambda_function_association {
+      event_type   = "origin-response"
+      lambda_arn   = aws_lambda_function.seo_prerender.qualified_arn
+      include_body = true
     }
 
     viewer_protocol_policy = "redirect-to-https"

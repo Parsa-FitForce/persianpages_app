@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../hooks/useAuth';
 
 export default function Login() {
@@ -30,9 +31,14 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4">
-      <div className="card p-8 w-full max-w-md">
-        <h1 className="text-2xl font-bold text-center mb-6">ورود به حساب کاربری</h1>
+    <>
+      <Helmet>
+        <title>ورود | PersianPages</title>
+        <meta name="robots" content="noindex, nofollow" />
+      </Helmet>
+      <div className="min-h-[80vh] flex items-center justify-center px-4">
+        <div className="card p-8 w-full max-w-md">
+          <h1 className="text-2xl font-bold text-center mb-6">ورود به حساب کاربری</h1>
 
         {error && (
           <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">
@@ -81,6 +87,12 @@ export default function Login() {
           </button>
         </form>
 
+        <div className="text-center mt-3">
+          <Link to="/forgot-password" className="text-sm text-gray-500 hover:text-primary-600 hover:underline">
+            رمز عبور خود را فراموش کرده‌اید؟
+          </Link>
+        </div>
+
         <div className="relative my-6">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-gray-300"></div>
@@ -122,6 +134,7 @@ export default function Login() {
           </Link>
         </p>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

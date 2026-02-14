@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { authenticate, optionalAuth } from '../middleware/auth.js';
 import { normalizePhone } from '../utils/phone.js';
+import { generateUniqueSlug } from '../utils/slug.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -73,16 +74,27 @@ router.get('/', optionalAuth, async (req: Request, res: Response) => {
   }
 });
 
-// Get single listing
-router.get('/:id', async (req: Request, res: Response) => {
+// Get single listing (by slug or id)
+router.get('/:idOrSlug', async (req: Request, res: Response) => {
   try {
-    const listing = await prisma.listing.findUnique({
-      where: { id: req.params.id },
-      include: {
-        category: true,
-        user: { select: { id: true, name: true } },
-      },
+    const param = req.params.idOrSlug;
+    const include = {
+      category: true,
+      user: { select: { id: true, name: true } },
+    };
+
+    // Try slug first, then fall back to id
+    let listing = await prisma.listing.findUnique({
+      where: { slug: param },
+      include,
     });
+
+    if (!listing) {
+      listing = await prisma.listing.findUnique({
+        where: { id: param },
+        include,
+      });
+    }
 
     if (!listing) {
       return res.status(404).json({ error: 'کسب‌وکار یافت نشد' });
@@ -119,42 +131,12 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'لطفا فیلدهای الزامی را پر کنید (تلفن الزامی است)' });
     }
 
-    // Verify phone verification token
-    const { verificationToken } = req.body;
-    if (!verificationToken) {
-      return res.status(400).json({ error: 'تایید شماره تلفن الزامی است' });
-    }
-
-    try {
-      const decoded = jwt.verify(verificationToken, JWT_SECRET) as {
-        userId: string;
-        phone: string;
-        verificationId: string;
-      };
-
-      if (decoded.userId !== req.user!.id) {
-        return res.status(403).json({ error: 'توکن تایید نامعتبر است' });
-      }
-
-      if (normalizePhone(decoded.phone) !== normalizePhone(phone)) {
-        return res.status(400).json({ error: 'شماره تلفن با شماره تایید شده مطابقت ندارد' });
-      }
-
-      const verification = await prisma.phoneVerification.findUnique({
-        where: { id: decoded.verificationId },
-      });
-
-      if (!verification || !verification.verified) {
-        return res.status(400).json({ error: 'تایید تلفن انجام نشده است' });
-      }
-    } catch (err) {
-      return res.status(400).json({ error: 'توکن تایید منقضی شده یا نامعتبر است' });
-    }
-
     const category = await prisma.category.findUnique({ where: { id: categoryId } });
     if (!category) {
       return res.status(400).json({ error: 'دسته‌بندی نامعتبر است' });
     }
+
+    const slug = await generateUniqueSlug(prisma, title, city);
 
     const listing = await prisma.listing.create({
       data: {
@@ -173,6 +155,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
         latitude: latitude ? parseFloat(latitude) : undefined,
         longitude: longitude ? parseFloat(longitude) : undefined,
         placeId,
+        slug,
       },
       include: {
         category: true,
@@ -218,7 +201,54 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
       latitude,
       longitude,
       placeId,
+      verificationToken,
     } = req.body;
+
+    // If phone changed, reset phoneVerified
+    let phoneVerified = undefined;
+    if (phone !== undefined && normalizePhone(phone) !== normalizePhone(existing.phone || '')) {
+      phoneVerified = false;
+    }
+
+    // If verification token provided, verify and mark phone as verified
+    if (verificationToken) {
+      try {
+        const decoded = jwt.verify(verificationToken, JWT_SECRET) as {
+          userId: string;
+          phone: string;
+          verificationId: string;
+        };
+
+        if (decoded.userId !== req.user!.id) {
+          return res.status(403).json({ error: 'توکن تایید نامعتبر است' });
+        }
+
+        const currentPhone = phone || existing.phone;
+        if (currentPhone && normalizePhone(decoded.phone) !== normalizePhone(currentPhone)) {
+          return res.status(400).json({ error: 'شماره تلفن با شماره تایید شده مطابقت ندارد' });
+        }
+
+        const verification = await prisma.phoneVerification.findUnique({
+          where: { id: decoded.verificationId },
+        });
+
+        if (!verification || !verification.verified) {
+          return res.status(400).json({ error: 'تایید تلفن انجام نشده است' });
+        }
+
+        phoneVerified = true;
+      } catch (err) {
+        return res.status(400).json({ error: 'توکن تایید منقضی شده یا نامعتبر است' });
+      }
+    }
+
+    // Regenerate slug if title or city changed
+    let newSlug = undefined;
+    const newTitle = title || existing.title;
+    const newCity = city || existing.city;
+    if ((title && title !== existing.title) || (city && city !== existing.city)) {
+      newSlug = await generateUniqueSlug(prisma, newTitle, newCity, existing.id);
+    }
 
     const listing = await prisma.listing.update({
       where: { id: req.params.id },
@@ -235,6 +265,8 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
         businessHours,
         photos,
         isActive,
+        phoneVerified,
+        ...(newSlug && { slug: newSlug }),
         latitude: latitude !== undefined ? (latitude ? parseFloat(latitude) : null) : undefined,
         longitude: longitude !== undefined ? (longitude ? parseFloat(longitude) : null) : undefined,
         placeId: placeId !== undefined ? (placeId || null) : undefined,

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../hooks/useAuth';
 
 export default function Register() {
@@ -39,7 +40,7 @@ export default function Register() {
 
     try {
       await register(email, password, name);
-      navigate('/dashboard');
+      navigate('/dashboard', { state: { showVerificationMsg: true } });
     } catch (err: any) {
       setError(err.response?.data?.error || 'خطا در ثبت‌نام');
     } finally {
@@ -48,9 +49,14 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4">
-      <div className="card p-8 w-full max-w-md">
-        <h1 className="text-2xl font-bold text-center mb-6">ثبت‌نام</h1>
+    <>
+      <Helmet>
+        <title>ثبت‌نام | PersianPages</title>
+        <meta name="robots" content="noindex, nofollow" />
+      </Helmet>
+      <div className="min-h-[80vh] flex items-center justify-center px-4">
+        <div className="card p-8 w-full max-w-md">
+          <h1 className="text-2xl font-bold text-center mb-6">ثبت‌نام</h1>
 
         {error && (
           <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm">
@@ -172,6 +178,7 @@ export default function Register() {
           </Link>
         </p>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

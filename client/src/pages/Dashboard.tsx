@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { listingsApi } from '../services/api';
 import type { Listing } from '../types';
 import { useAuth } from '../hooks/useAuth';
@@ -30,10 +31,15 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-2xl font-bold">داشبورد</h1>
+    <>
+      <Helmet>
+        <title>داشبورد | PersianPages</title>
+        <meta name="robots" content="noindex, nofollow" />
+      </Helmet>
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-2xl font-bold">داشبورد</h1>
           <p className="text-gray-600">خوش آمدید، {user?.name}</p>
         </div>
         <Link to="/listings/new" className="btn-primary">
@@ -86,7 +92,7 @@ export default function Dashboard() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Link
-                    to={`/listing/${listing.id}`}
+                    to={`/listing/${listing.slug || listing.id}`}
                     className="text-gray-600 hover:text-gray-900 px-3 py-1"
                   >
                     مشاهده
@@ -108,7 +114,8 @@ export default function Dashboard() {
             ))}
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

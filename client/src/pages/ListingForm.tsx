@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { GoogleMap, MarkerF } from '@react-google-maps/api';
 import { categoriesApi, listingsApi, uploadApi } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 import OtpVerifyModal from '../components/OtpVerifyModal';
 import type { Category } from '../types';
 import { countries, cities, searchCities, getCountryByCode, type Country, type City } from '../i18n/locations';
@@ -57,6 +59,8 @@ export default function ListingForm() {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const { isLoaded } = useGoogleMaps();
+  const { user } = useAuth();
+  const needsVerification = !isEdit && user && !user.emailVerified && !user.googleId;
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [latitude, setLatitude] = useState<number | null>(null);
@@ -120,6 +124,7 @@ export default function ListingForm() {
         if (l.latitude != null) setLatitude(l.latitude);
         if (l.longitude != null) setLongitude(l.longitude);
         if (l.placeId) setPlaceId(l.placeId);
+        if (l.phoneVerified) setPhoneVerified(true);
         // Find country code from name
         const foundCountry = countries.find(c => c.name === l.country);
         if (foundCountry) {
@@ -218,7 +223,7 @@ export default function ListingForm() {
   const handlePhoneInput = (value: string, field: 'phone' | 'whatsapp') => {
     const formatted = formatPhoneNumber(value, selectedCountryCode);
     setForm((prev) => ({ ...prev, [field]: formatted }));
-    if (field === 'phone' && !isEdit && phoneVerified) {
+    if (field === 'phone' && phoneVerified) {
       setPhoneVerified(false);
       setVerificationToken('');
     }
@@ -247,7 +252,6 @@ export default function ListingForm() {
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [verificationToken, setVerificationToken] = useState('');
   const [phoneVerified, setPhoneVerified] = useState(false);
-  const [pendingSubmit, setPendingSubmit] = useState(false);
 
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -354,7 +358,7 @@ export default function ListingForm() {
       placeId: placeId || undefined,
     };
 
-    if (!isEdit && token) {
+    if (token) {
       data.verificationToken = token;
     }
 
@@ -377,33 +381,36 @@ export default function ListingForm() {
 
     if (!validateForm()) return;
 
-    // For new listings, require phone verification
-    if (!isEdit && !verificationToken) {
-      setPendingSubmit(true);
-      setShowOtpModal(true);
+    if (needsVerification) {
+      setError('برای افزودن کسب‌وکار، ابتدا باید ایمیل خود را تایید کنید');
       return;
     }
 
-    await submitForm(verificationToken);
+    await submitForm(verificationToken || undefined);
   };
 
   const handlePhoneVerified = async (token: string) => {
     setVerificationToken(token);
     setPhoneVerified(true);
     setShowOtpModal(false);
-
-    // Auto-submit if we were waiting for verification
-    if (pendingSubmit) {
-      setPendingSubmit(false);
-      await submitForm(token);
-    }
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-8">
-        {isEdit ? 'ویرایش کسب‌وکار' : 'افزودن کسب‌وکار'}
-      </h1>
+    <>
+      <Helmet>
+        <title>{isEdit ? 'ویرایش کسب‌وکار' : 'افزودن کسب‌وکار'} | PersianPages</title>
+        <meta name="robots" content="noindex, nofollow" />
+      </Helmet>
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold mb-8">
+          {isEdit ? 'ویرایش کسب‌وکار' : 'افزودن کسب‌وکار'}
+        </h1>
+
+      {needsVerification && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-lg mb-6 text-sm">
+          برای افزودن کسب‌وکار، ابتدا باید ایمیل خود را تایید کنید. لطفا صندوق ورودی ایمیل خود را بررسی کنید.
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-6 text-sm">
@@ -623,7 +630,7 @@ export default function ListingForm() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 تلفن {!isEdit && '*'}
-                {phoneVerified && !isEdit && (
+                {phoneVerified && (
                   <span className="text-green-600 text-xs mr-2">
                     (تایید شده)
                   </span>
@@ -640,6 +647,15 @@ export default function ListingForm() {
                 placeholder={selectedCountry ? `${selectedCountry.dialCode} ...` : '+1 234 567 8900'}
                 required={!isEdit}
               />
+              {isEdit && !phoneVerified && form.phone && (
+                <button
+                  type="button"
+                  onClick={() => setShowOtpModal(true)}
+                  className="mt-2 text-sm text-primary-600 hover:text-primary-700 hover:underline"
+                >
+                  تایید شماره تلفن
+                </button>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -827,14 +843,12 @@ export default function ListingForm() {
 
       <OtpVerifyModal
         isOpen={showOtpModal}
-        onClose={() => {
-          setShowOtpModal(false);
-          setPendingSubmit(false);
-        }}
+        onClose={() => setShowOtpModal(false)}
         onVerified={handlePhoneVerified}
         phone={stripPhoneForStorage(form.phone)}
         mode="create"
       />
-    </div>
+      </div>
+    </>
   );
 }

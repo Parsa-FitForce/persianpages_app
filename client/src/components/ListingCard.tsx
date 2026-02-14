@@ -8,7 +8,7 @@ interface Props {
 
 export default function ListingCard({ listing }: Props) {
   return (
-    <Link to={`/listing/${listing.id}`} className="card hover:shadow-md transition-shadow">
+    <Link to={`/listing/${listing.slug || listing.id}`} className="card hover:shadow-md transition-shadow">
       <div className="aspect-video bg-gray-100 relative">
         {listing.photos[0] ? (
           <img

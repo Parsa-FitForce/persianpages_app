@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 
 const router = Router();
 const prisma = new PrismaClient();
+const SITE_URL = 'https://persianpages.com';
 
 let listingsSitemapCache: { xml: string; timestamp: number } | null = null;
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
@@ -12,7 +13,7 @@ router.get('/sitemap.xml', (_req: Request, res: Response) => {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap>
-    <loc>/api/sitemap-listings.xml</loc>
+    <loc>${SITE_URL}/api/sitemap-listings.xml</loc>
   </sitemap>
 </sitemapindex>`;
 
@@ -31,7 +32,7 @@ router.get('/sitemap-listings.xml', async (_req: Request, res: Response) => {
 
     const listings = await prisma.listing.findMany({
       where: { isActive: true },
-      select: { id: true, updatedAt: true },
+      select: { id: true, slug: true, updatedAt: true },
       orderBy: { updatedAt: 'desc' },
     });
 
@@ -39,7 +40,7 @@ router.get('/sitemap-listings.xml', async (_req: Request, res: Response) => {
       .map(
         (listing) =>
           `  <url>
-    <loc>/listings/${listing.id}</loc>
+    <loc>${SITE_URL}/listing/${listing.slug || listing.id}</loc>
     <lastmod>${listing.updatedAt.toISOString().split('T')[0]}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>

@@ -25,7 +25,25 @@ export const authApi = {
   login: (data: { email: string; password: string }) =>
     api.post<AuthResponse>('/auth/login', data),
 
-  me: () => api.get<{ id: string; email: string; name: string }>('/auth/me'),
+  me: () => api.get<{ id: string; email: string; name: string; emailVerified: boolean; googleId?: string; hasPassword?: boolean }>('/auth/me'),
+
+  forgotPassword: (email: string) =>
+    api.post<{ message: string }>('/auth/forgot-password', { email }),
+
+  resetPassword: (token: string, password: string) =>
+    api.post<{ message: string }>('/auth/reset-password', { token, password }),
+
+  verifyEmail: (token: string) =>
+    api.get<{ message: string }>('/auth/verify-email', { params: { token } }),
+
+  resendVerification: () =>
+    api.post<{ message: string }>('/auth/resend-verification'),
+
+  updateProfile: (data: { name: string; email: string }) =>
+    api.put<{ id: string; email: string; name: string; emailVerified: boolean; googleId?: string }>('/auth/profile', data),
+
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    api.put<{ message: string }>('/auth/change-password', data),
 };
 
 // Categories

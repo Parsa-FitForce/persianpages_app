@@ -23,11 +23,11 @@ export default function ListingDetail() {
   const [maskedPhone, setMaskedPhone] = useState('');
 
   const handleClaimClick = async () => {
-    if (!id || !user) return;
+    if (!listing || !user) return;
     setClaimError('');
 
     try {
-      const res = await verificationApi.getPhoneHint(id);
+      const res = await verificationApi.getPhoneHint(listing.id);
       setMaskedPhone(res.data.maskedPhone);
       setShowOtpModal(true);
     } catch (err: any) {
@@ -36,12 +36,12 @@ export default function ListingDetail() {
   };
 
   const handleClaimVerified = async (verificationToken: string) => {
-    if (!id) return;
+    if (!listing) return;
     setShowOtpModal(false);
     setClaiming(true);
     setClaimError('');
     try {
-      const res = await listingsApi.claim(id, verificationToken);
+      const res = await listingsApi.claim(listing.id, verificationToken);
       setListing(res.data);
     } catch (err: any) {
       setClaimError(err.response?.data?.error || 'خطا در ثبت مالکیت');
@@ -90,6 +90,7 @@ export default function ListingDetail() {
       <Helmet>
         <title>{listingTitle}</title>
         <meta name="description" content={listingDescription} />
+        <link rel="canonical" href={`https://persianpages.com/listing/${listing.slug || id}`} />
         <meta property="og:title" content={listingTitle} />
         <meta property="og:description" content={listingDescription} />
         <meta property="og:type" content="business.business" />
@@ -108,7 +109,7 @@ export default function ListingDetail() {
           {JSON.stringify(getBreadcrumbSchema([
             { name: 'پرشین‌پیجز', url: '/' },
             { name: listing.category.nameFa, url: `/search?category=${listing.category.slug}` },
-            { name: listing.title, url: `/listings/${listing.id}` },
+            { name: listing.title, url: `/listing/${listing.slug || listing.id}` },
           ]))}
         </script>
       </Helmet>

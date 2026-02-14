@@ -50,6 +50,14 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
             where: { googleId: profile.id },
           });
 
+          // Ensure returning Google users are marked as verified
+          if (user && !user.emailVerified) {
+            user = await prisma.user.update({
+              where: { id: user.id },
+              data: { emailVerified: true },
+            });
+          }
+
           if (!user) {
             user = await prisma.user.findUnique({
               where: { email },
@@ -59,7 +67,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
               // Link Google account to existing user
               user = await prisma.user.update({
                 where: { id: user.id },
-                data: { googleId: profile.id },
+                data: { googleId: profile.id, emailVerified: true },
               });
             } else {
               // Create new user
@@ -68,6 +76,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
                   email,
                   name: profile.displayName || email.split('@')[0],
                   googleId: profile.id,
+                  emailVerified: true,
                 },
               });
             }

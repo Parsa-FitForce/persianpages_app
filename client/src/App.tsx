@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import Header from './components/Header';
 import Footer from './components/Footer';
+import EmailVerificationBanner from './components/EmailVerificationBanner';
 import Home from './pages/Home';
 import Search from './pages/Search';
 import Login from './pages/Login';
@@ -11,8 +12,12 @@ import Dashboard from './pages/Dashboard';
 import ListingDetail from './pages/ListingDetail';
 import ListingForm from './pages/ListingForm';
 import SelectCountry from './pages/SelectCountry';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+import VerifyEmail from './pages/VerifyEmail';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Terms from './pages/Terms';
+import Settings from './pages/Settings';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -63,6 +68,7 @@ export default function App() {
           element={
             <>
               <Header />
+              <EmailVerificationBanner />
               <main>
                 <Routes>
                   <Route path="/" element={<Home />} />
@@ -86,6 +92,9 @@ export default function App() {
                     }
                   />
                   <Route path="/auth/callback" element={<AuthCallback />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/verify-email" element={<VerifyEmail />} />
                   <Route path="/privacy" element={<PrivacyPolicy />} />
                   <Route path="/terms" element={<Terms />} />
 
@@ -94,6 +103,14 @@ export default function App() {
                     element={
                       <ProtectedRoute>
                         <Dashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <ProtectedRoute>
+                        <Settings />
                       </ProtectedRoute>
                     }
                   />

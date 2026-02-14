@@ -1,6 +1,14 @@
+import { Helmet } from 'react-helmet-async';
+
 export default function Terms() {
   return (
-    <div className="max-w-3xl mx-auto px-4 py-10">
+    <>
+      <Helmet>
+        <title>Terms & Conditions | شرایط استفاده | PersianPages</title>
+        <meta name="description" content="PersianPages terms and conditions of use." />
+        <link rel="canonical" href="https://persianpages.com/terms" />
+      </Helmet>
+      <div className="max-w-3xl mx-auto px-4 py-10">
       <div className="card p-8 space-y-8">
         {/* English */}
         <section dir="ltr" className="text-left space-y-4 font-latin">
@@ -164,7 +172,8 @@ export default function Terms() {
             </a>
           </p>
         </section>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

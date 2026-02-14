@@ -2,6 +2,9 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  emailVerified?: boolean;
+  googleId?: string;
+  hasPassword?: boolean;
 }
 
 export interface Category {
@@ -14,6 +17,7 @@ export interface Category {
 
 export interface Listing {
   id: string;
+  slug?: string;
   title: string;
   description: string;
   phone?: string;
@@ -33,6 +37,7 @@ export interface Listing {
     [key: string]: string;
   };
   photos: string[];
+  phoneVerified?: boolean;
   isActive: boolean;
   source: string;
   isClaimed: boolean;

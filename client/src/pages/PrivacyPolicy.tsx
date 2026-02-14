@@ -1,6 +1,14 @@
+import { Helmet } from 'react-helmet-async';
+
 export default function PrivacyPolicy() {
   return (
-    <div className="max-w-3xl mx-auto px-4 py-10">
+    <>
+      <Helmet>
+        <title>Privacy Policy | حریم خصوصی | PersianPages</title>
+        <meta name="description" content="PersianPages privacy policy - how we collect, use, and protect your personal information." />
+        <link rel="canonical" href="https://persianpages.com/privacy" />
+      </Helmet>
+      <div className="max-w-3xl mx-auto px-4 py-10">
       <div className="card p-8 space-y-8">
         {/* English */}
         <section dir="ltr" className="text-left space-y-4 font-latin">
@@ -158,7 +166,8 @@ export default function PrivacyPolicy() {
             </a>
           </p>
         </section>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

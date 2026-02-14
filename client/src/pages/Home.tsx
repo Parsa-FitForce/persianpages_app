@@ -62,6 +62,7 @@ export default function Home() {
         <meta name="description" content={pageDescription} />
         <meta property="og:title" content={pageTitle} />
         <meta property="og:description" content={pageDescription} />
+        <link rel="canonical" href="https://persianpages.com/" />
         <script type="application/ld+json">
           {JSON.stringify(getWebsiteSchema())}
         </script>
