@@ -126,10 +126,10 @@ export default function ListingForm() {
           setSelectedCountryCode(foundCountry.code);
           // Re-format stored phone numbers for display
           if (l.phone) {
-            setForm(prev => ({ ...prev, phone: formatPhoneNumber(l.phone, foundCountry.code) }));
+            setForm(prev => ({ ...prev, phone: formatPhoneNumber(l.phone!, foundCountry.code) }));
           }
           if (l.socialLinks?.whatsapp) {
-            setForm(prev => ({ ...prev, whatsapp: formatPhoneNumber(l.socialLinks.whatsapp, foundCountry.code) }));
+            setForm(prev => ({ ...prev, whatsapp: formatPhoneNumber(l.socialLinks!.whatsapp!, foundCountry.code) }));
           }
         }
       });
