@@ -1,0 +1,889 @@
+{
+  "searchTerms": [
+    "restaurant",
+    "grocery",
+    "market",
+    "doctor",
+    "dentist",
+    "lawyer",
+    "realtor",
+    "beauty salon",
+    "mechanic",
+    "bakery",
+    "accounting",
+    "insurance"
+  ],
+  "cities": [
+    {
+      "nameEn": "Los Angeles",
+      "name": "لس‌آنجلس",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 1
+    },
+    {
+      "nameEn": "Beverly Hills",
+      "name": "بورلی‌هیلز",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 2
+    },
+    {
+      "nameEn": "Irvine",
+      "name": "ارواین",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 2
+    },
+    {
+      "nameEn": "Glendale",
+      "name": "گلندیل",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 2
+    },
+    {
+      "nameEn": "Santa Monica",
+      "name": "سانتا مونیکا",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 3
+    },
+    {
+      "nameEn": "Encino",
+      "name": "انسینو",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 3
+    },
+    {
+      "nameEn": "Woodland Hills",
+      "name": "وودلند هیلز",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 3
+    },
+    {
+      "nameEn": "San Diego",
+      "name": "سن‌دیگو",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 2
+    },
+    {
+      "nameEn": "San Francisco",
+      "name": "سانفرانسیسکو",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 2
+    },
+    {
+      "nameEn": "San Jose",
+      "name": "سن‌خوزه",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 2
+    },
+    {
+      "nameEn": "Palo Alto",
+      "name": "پالو آلتو",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 3
+    },
+    {
+      "nameEn": "Sacramento",
+      "name": "ساکرامنتو",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 3
+    },
+    {
+      "nameEn": "Fresno",
+      "name": "فرزنو",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 3
+    },
+    {
+      "nameEn": "Houston",
+      "name": "هیوستون",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 2
+    },
+    {
+      "nameEn": "Dallas",
+      "name": "دالاس",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 2
+    },
+    {
+      "nameEn": "Austin",
+      "name": "آستین",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 3
+    },
+    {
+      "nameEn": "San Antonio",
+      "name": "سن‌آنتونیو",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 3
+    },
+    {
+      "nameEn": "New York",
+      "name": "نیویورک",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 1
+    },
+    {
+      "nameEn": "Great Neck",
+      "name": "گریت‌نک",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 2
+    },
+    {
+      "nameEn": "Washington DC",
+      "name": "واشنگتن",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 1
+    },
+    {
+      "nameEn": "Chicago",
+      "name": "شیکاگو",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 2
+    },
+    {
+      "nameEn": "Seattle",
+      "name": "سیاتل",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 2
+    },
+    {
+      "nameEn": "Boston",
+      "name": "بوستون",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 2
+    },
+    {
+      "nameEn": "Miami",
+      "name": "مایامی",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 2
+    },
+    {
+      "nameEn": "Atlanta",
+      "name": "آتلانتا",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 2
+    },
+    {
+      "nameEn": "Phoenix",
+      "name": "فینیکس",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 3
+    },
+    {
+      "nameEn": "Las Vegas",
+      "name": "لاس‌وگاس",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 2
+    },
+    {
+      "nameEn": "Denver",
+      "name": "دنور",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 3
+    },
+    {
+      "nameEn": "Portland",
+      "name": "پورتلند",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 3
+    },
+    {
+      "nameEn": "Philadelphia",
+      "name": "فیلادلفیا",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 2
+    },
+    {
+      "nameEn": "Baltimore",
+      "name": "بالتیمور",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 3
+    },
+    {
+      "nameEn": "Minneapolis",
+      "name": "مینیاپولیس",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 3
+    },
+    {
+      "nameEn": "Salt Lake City",
+      "name": "سالت‌لیک‌سیتی",
+      "country": "آمریکا",
+      "countryCode": "us",
+      "priority": 3
+    },
+    {
+      "nameEn": "Toronto",
+      "name": "تورنتو",
+      "country": "کانادا",
+      "countryCode": "ca",
+      "priority": 1
+    },
+    {
+      "nameEn": "Vancouver",
+      "name": "ونکوور",
+      "country": "کانادا",
+      "countryCode": "ca",
+      "priority": 1
+    },
+    {
+      "nameEn": "Montreal",
+      "name": "مونترال",
+      "country": "کانادا",
+      "countryCode": "ca",
+      "priority": 2
+    },
+    {
+      "nameEn": "Calgary",
+      "name": "کلگری",
+      "country": "کانادا",
+      "countryCode": "ca",
+      "priority": 2
+    },
+    {
+      "nameEn": "Ottawa",
+      "name": "اتاوا",
+      "country": "کانادا",
+      "countryCode": "ca",
+      "priority": 3
+    },
+    {
+      "nameEn": "Edmonton",
+      "name": "ادمونتون",
+      "country": "کانادا",
+      "countryCode": "ca",
+      "priority": 2
+    },
+    {
+      "nameEn": "Winnipeg",
+      "name": "وینیپگ",
+      "country": "کانادا",
+      "countryCode": "ca",
+      "priority": 3
+    },
+    {
+      "nameEn": "Richmond Hill",
+      "name": "ریچموند‌هیل",
+      "country": "کانادا",
+      "countryCode": "ca",
+      "priority": 2
+    },
+    {
+      "nameEn": "North York",
+      "name": "نورث‌یورک",
+      "country": "کانادا",
+      "countryCode": "ca",
+      "priority": 2
+    },
+    {
+      "nameEn": "Markham",
+      "name": "مارکهام",
+      "country": "کانادا",
+      "countryCode": "ca",
+      "priority": 3
+    },
+    {
+      "nameEn": "Berlin",
+      "name": "برلین",
+      "country": "آلمان",
+      "countryCode": "de",
+      "priority": 2
+    },
+    {
+      "nameEn": "Munich",
+      "name": "مونیخ",
+      "country": "آلمان",
+      "countryCode": "de",
+      "priority": 2
+    },
+    {
+      "nameEn": "Frankfurt",
+      "name": "فرانکفورت",
+      "country": "آلمان",
+      "countryCode": "de",
+      "priority": 2
+    },
+    {
+      "nameEn": "Hamburg",
+      "name": "هامبورگ",
+      "country": "آلمان",
+      "countryCode": "de",
+      "priority": 2
+    },
+    {
+      "nameEn": "Cologne",
+      "name": "کلن",
+      "country": "آلمان",
+      "countryCode": "de",
+      "priority": 3
+    },
+    {
+      "nameEn": "Dusseldorf",
+      "name": "دوسلدورف",
+      "country": "آلمان",
+      "countryCode": "de",
+      "priority": 3
+    },
+    {
+      "nameEn": "Stuttgart",
+      "name": "اشتوتگارت",
+      "country": "آلمان",
+      "countryCode": "de",
+      "priority": 3
+    },
+    {
+      "nameEn": "Hannover",
+      "name": "هانوفر",
+      "country": "آلمان",
+      "countryCode": "de",
+      "priority": 3
+    },
+    {
+      "nameEn": "Bonn",
+      "name": "بن",
+      "country": "آلمان",
+      "countryCode": "de",
+      "priority": 3
+    },
+    {
+      "nameEn": "Nuremberg",
+      "name": "نورنبرگ",
+      "country": "آلمان",
+      "countryCode": "de",
+      "priority": 3
+    },
+    {
+      "nameEn": "Dubai",
+      "name": "دبی",
+      "country": "امارات",
+      "countryCode": "ae",
+      "priority": 2
+    },
+    {
+      "nameEn": "Abu Dhabi",
+      "name": "ابوظبی",
+      "country": "امارات",
+      "countryCode": "ae",
+      "priority": 2
+    },
+    {
+      "nameEn": "Sharjah",
+      "name": "شارجه",
+      "country": "امارات",
+      "countryCode": "ae",
+      "priority": 3
+    },
+    {
+      "nameEn": "Ajman",
+      "name": "عجمان",
+      "country": "امارات",
+      "countryCode": "ae",
+      "priority": 3
+    },
+    {
+      "nameEn": "Istanbul",
+      "name": "استانبول",
+      "country": "ترکیه",
+      "countryCode": "tr",
+      "priority": 2
+    },
+    {
+      "nameEn": "Ankara",
+      "name": "آنکارا",
+      "country": "ترکیه",
+      "countryCode": "tr",
+      "priority": 3
+    },
+    {
+      "nameEn": "Izmir",
+      "name": "ازمیر",
+      "country": "ترکیه",
+      "countryCode": "tr",
+      "priority": 3
+    },
+    {
+      "nameEn": "Antalya",
+      "name": "آنتالیا",
+      "country": "ترکیه",
+      "countryCode": "tr",
+      "priority": 3
+    },
+    {
+      "nameEn": "Bursa",
+      "name": "بورسا",
+      "country": "ترکیه",
+      "countryCode": "tr",
+      "priority": 3
+    },
+    {
+      "nameEn": "Van",
+      "name": "وان",
+      "country": "ترکیه",
+      "countryCode": "tr",
+      "priority": 3
+    },
+    {
+      "nameEn": "London",
+      "name": "لندن",
+      "country": "انگلستان",
+      "countryCode": "gb",
+      "priority": 2
+    },
+    {
+      "nameEn": "Manchester",
+      "name": "منچستر",
+      "country": "انگلستان",
+      "countryCode": "gb",
+      "priority": 3
+    },
+    {
+      "nameEn": "Birmingham",
+      "name": "بیرمنگام",
+      "country": "انگلستان",
+      "countryCode": "gb",
+      "priority": 3
+    },
+    {
+      "nameEn": "Leeds",
+      "name": "لیدز",
+      "country": "انگلستان",
+      "countryCode": "gb",
+      "priority": 3
+    },
+    {
+      "nameEn": "Glasgow",
+      "name": "گلاسگو",
+      "country": "انگلستان",
+      "countryCode": "gb",
+      "priority": 3
+    },
+    {
+      "nameEn": "Bristol",
+      "name": "بریستول",
+      "country": "انگلستان",
+      "countryCode": "gb",
+      "priority": 3
+    },
+    {
+      "nameEn": "Liverpool",
+      "name": "لیورپول",
+      "country": "انگلستان",
+      "countryCode": "gb",
+      "priority": 3
+    },
+    {
+      "nameEn": "Newcastle",
+      "name": "نیوکاسل",
+      "country": "انگلستان",
+      "countryCode": "gb",
+      "priority": 3
+    },
+    {
+      "nameEn": "Stockholm",
+      "name": "استکهلم",
+      "country": "سوئد",
+      "countryCode": "se",
+      "priority": 2
+    },
+    {
+      "nameEn": "Gothenburg",
+      "name": "گوتنبرگ",
+      "country": "سوئد",
+      "countryCode": "se",
+      "priority": 3
+    },
+    {
+      "nameEn": "Uppsala",
+      "name": "اوپسالا",
+      "country": "سوئد",
+      "countryCode": "se",
+      "priority": 3
+    },
+    {
+      "nameEn": "Malmo",
+      "name": "مالمو",
+      "country": "سوئد",
+      "countryCode": "se",
+      "priority": 3
+    },
+    {
+      "nameEn": "Linkoping",
+      "name": "لینشوپینگ",
+      "country": "سوئد",
+      "countryCode": "se",
+      "priority": 3
+    },
+    {
+      "nameEn": "Sydney",
+      "name": "سیدنی",
+      "country": "استرالیا",
+      "countryCode": "au",
+      "priority": 2
+    },
+    {
+      "nameEn": "Melbourne",
+      "name": "ملبورن",
+      "country": "استرالیا",
+      "countryCode": "au",
+      "priority": 2
+    },
+    {
+      "nameEn": "Brisbane",
+      "name": "بریزبن",
+      "country": "استرالیا",
+      "countryCode": "au",
+      "priority": 3
+    },
+    {
+      "nameEn": "Perth",
+      "name": "پرث",
+      "country": "استرالیا",
+      "countryCode": "au",
+      "priority": 3
+    },
+    {
+      "nameEn": "Adelaide",
+      "name": "آدلاید",
+      "country": "استرالیا",
+      "countryCode": "au",
+      "priority": 3
+    },
+    {
+      "nameEn": "Canberra",
+      "name": "کانبرا",
+      "country": "استرالیا",
+      "countryCode": "au",
+      "priority": 3
+    },
+    {
+      "nameEn": "Paris",
+      "name": "پاریس",
+      "country": "فرانسه",
+      "countryCode": "fr",
+      "priority": 2
+    },
+    {
+      "nameEn": "Lyon",
+      "name": "لیون",
+      "country": "فرانسه",
+      "countryCode": "fr",
+      "priority": 3
+    },
+    {
+      "nameEn": "Marseille",
+      "name": "مارسی",
+      "country": "فرانسه",
+      "countryCode": "fr",
+      "priority": 3
+    },
+    {
+      "nameEn": "Toulouse",
+      "name": "تولوز",
+      "country": "فرانسه",
+      "countryCode": "fr",
+      "priority": 3
+    },
+    {
+      "nameEn": "Nice",
+      "name": "نیس",
+      "country": "فرانسه",
+      "countryCode": "fr",
+      "priority": 3
+    },
+    {
+      "nameEn": "Amsterdam",
+      "name": "آمستردام",
+      "country": "هلند",
+      "countryCode": "nl",
+      "priority": 2
+    },
+    {
+      "nameEn": "Rotterdam",
+      "name": "روتردام",
+      "country": "هلند",
+      "countryCode": "nl",
+      "priority": 3
+    },
+    {
+      "nameEn": "The Hague",
+      "name": "لاهه",
+      "country": "هلند",
+      "countryCode": "nl",
+      "priority": 3
+    },
+    {
+      "nameEn": "Utrecht",
+      "name": "اوترخت",
+      "country": "هلند",
+      "countryCode": "nl",
+      "priority": 3
+    },
+    {
+      "nameEn": "Eindhoven",
+      "name": "آیندهوون",
+      "country": "هلند",
+      "countryCode": "nl",
+      "priority": 3
+    },
+    {
+      "nameEn": "Vienna",
+      "name": "وین",
+      "country": "اتریش",
+      "countryCode": "at",
+      "priority": 2
+    },
+    {
+      "nameEn": "Salzburg",
+      "name": "سالزبورگ",
+      "country": "اتریش",
+      "countryCode": "at",
+      "priority": 3
+    },
+    {
+      "nameEn": "Graz",
+      "name": "گراتس",
+      "country": "اتریش",
+      "countryCode": "at",
+      "priority": 3
+    },
+    {
+      "nameEn": "Linz",
+      "name": "لینتس",
+      "country": "اتریش",
+      "countryCode": "at",
+      "priority": 3
+    },
+    {
+      "nameEn": "Milan",
+      "name": "میلان",
+      "country": "ایتالیا",
+      "countryCode": "it",
+      "priority": 3
+    },
+    {
+      "nameEn": "Rome",
+      "name": "رم",
+      "country": "ایتالیا",
+      "countryCode": "it",
+      "priority": 3
+    },
+    {
+      "nameEn": "Turin",
+      "name": "تورین",
+      "country": "ایتالیا",
+      "countryCode": "it",
+      "priority": 3
+    },
+    {
+      "nameEn": "Bologna",
+      "name": "بولونیا",
+      "country": "ایتالیا",
+      "countryCode": "it",
+      "priority": 3
+    },
+    {
+      "nameEn": "Madrid",
+      "name": "مادرید",
+      "country": "اسپانیا",
+      "countryCode": "es",
+      "priority": 3
+    },
+    {
+      "nameEn": "Barcelona",
+      "name": "بارسلونا",
+      "country": "اسپانیا",
+      "countryCode": "es",
+      "priority": 3
+    },
+    {
+      "nameEn": "Valencia",
+      "name": "والنسیا",
+      "country": "اسپانیا",
+      "countryCode": "es",
+      "priority": 3
+    },
+    {
+      "nameEn": "Oslo",
+      "name": "اسلو",
+      "country": "نروژ",
+      "countryCode": "no",
+      "priority": 3
+    },
+    {
+      "nameEn": "Bergen",
+      "name": "برگن",
+      "country": "نروژ",
+      "countryCode": "no",
+      "priority": 3
+    },
+    {
+      "nameEn": "Trondheim",
+      "name": "تروندهایم",
+      "country": "نروژ",
+      "countryCode": "no",
+      "priority": 3
+    },
+    {
+      "nameEn": "Copenhagen",
+      "name": "کپنهاگ",
+      "country": "دانمارک",
+      "countryCode": "dk",
+      "priority": 3
+    },
+    {
+      "nameEn": "Aarhus",
+      "name": "آرهوس",
+      "country": "دانمارک",
+      "countryCode": "dk",
+      "priority": 3
+    },
+    {
+      "nameEn": "Odense",
+      "name": "اودنسه",
+      "country": "دانمارک",
+      "countryCode": "dk",
+      "priority": 3
+    },
+    {
+      "nameEn": "Brussels",
+      "name": "بروکسل",
+      "country": "بلژیک",
+      "countryCode": "be",
+      "priority": 3
+    },
+    {
+      "nameEn": "Antwerp",
+      "name": "آنتورپ",
+      "country": "بلژیک",
+      "countryCode": "be",
+      "priority": 3
+    },
+    {
+      "nameEn": "Ghent",
+      "name": "گنت",
+      "country": "بلژیک",
+      "countryCode": "be",
+      "priority": 3
+    },
+    {
+      "nameEn": "Zurich",
+      "name": "زوریخ",
+      "country": "سوئیس",
+      "countryCode": "ch",
+      "priority": 3
+    },
+    {
+      "nameEn": "Geneva",
+      "name": "ژنو",
+      "country": "سوئیس",
+      "countryCode": "ch",
+      "priority": 3
+    },
+    {
+      "nameEn": "Bern",
+      "name": "برن",
+      "country": "سوئیس",
+      "countryCode": "ch",
+      "priority": 3
+    },
+    {
+      "nameEn": "Basel",
+      "name": "بازل",
+      "country": "سوئیس",
+      "countryCode": "ch",
+      "priority": 3
+    },
+    {
+      "nameEn": "Auckland",
+      "name": "اوکلند",
+      "country": "نیوزیلند",
+      "countryCode": "nz",
+      "priority": 3
+    },
+    {
+      "nameEn": "Wellington",
+      "name": "ولینگتون",
+      "country": "نیوزیلند",
+      "countryCode": "nz",
+      "priority": 3
+    },
+    {
+      "nameEn": "Christchurch",
+      "name": "کرایستچرچ",
+      "country": "نیوزیلند",
+      "countryCode": "nz",
+      "priority": 3
+    },
+    {
+      "nameEn": "Tokyo",
+      "name": "توکیو",
+      "country": "ژاپن",
+      "countryCode": "jp",
+      "priority": 3
+    },
+    {
+      "nameEn": "Osaka",
+      "name": "اوساکا",
+      "country": "ژاپن",
+      "countryCode": "jp",
+      "priority": 3
+    },
+    {
+      "nameEn": "Yokohama",
+      "name": "یوکوهاما",
+      "country": "ژاپن",
+      "countryCode": "jp",
+      "priority": 3
+    },
+    {
+      "nameEn": "Kuala Lumpur",
+      "name": "کوالالامپور",
+      "country": "مالزی",
+      "countryCode": "my",
+      "priority": 3
+    },
+    {
+      "nameEn": "Penang",
+      "name": "پنانگ",
+      "country": "مالزی",
+      "countryCode": "my",
+      "priority": 3
+    }
+  ],
+  "lastRun": {
+    "Los Angeles": "2026-02-14"
+  }
+}

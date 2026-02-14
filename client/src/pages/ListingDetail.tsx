@@ -200,7 +200,11 @@ export default function ListingDetail() {
                 {Object.entries(listing.businessHours).map(([day, hours]) => (
                   <div key={day} className="flex justify-between text-sm">
                     <span className="text-gray-600">{day}</span>
-                    <span>{hours}</span>
+                    <span>
+                      {typeof hours === 'string'
+                        ? hours
+                        : `${(hours as any).open} - ${(hours as any).close}`}
+                    </span>
                   </div>
                 ))}
               </div>
