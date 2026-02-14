@@ -290,43 +290,46 @@ export default function ListingForm() {
     }));
   };
 
-  const submitForm = async (token?: string) => {
+  const validateForm = (): boolean => {
     setError('');
 
-    // Validate country/city against known values
     const validCountry = countries.find(c => c.name === form.country);
     if (!validCountry) {
       setError('لطفا کشور را از لیست انتخاب کنید');
-      return;
+      return false;
     }
     const validCity = cities.find(c => c.name === form.city && c.country === validCountry.code);
     if (!validCity) {
       setError('لطفا شهر را از لیست انتخاب کنید');
-      return;
+      return false;
     }
 
-    // Validate phone number
     const phoneRaw = form.phone.replace(/\s/g, '');
     if (phoneRaw && phoneRaw !== validCountry.dialCode) {
       const parsed = parsePhoneNumberFromString(phoneRaw, validCountry.code.toUpperCase() as any);
       if (!parsed || !parsed.isValid()) {
         setError('شماره تلفن وارد شده معتبر نیست');
-        return;
+        return false;
       }
     } else if (!isEdit) {
       setError('شماره تلفن الزامی است');
-      return;
+      return false;
     }
 
-    // Validate whatsapp if provided
     const waRaw = form.whatsapp.replace(/\s/g, '');
     if (waRaw && waRaw !== validCountry.dialCode) {
       const parsedWa = parsePhoneNumberFromString(waRaw, validCountry.code.toUpperCase() as any);
       if (!parsedWa || !parsedWa.isValid()) {
         setError('شماره واتساپ وارد شده معتبر نیست');
-        return;
+        return false;
       }
     }
+
+    return true;
+  };
+
+  const submitForm = async (token?: string) => {
+    if (!validateForm()) return;
 
     setLoading(true);
 
@@ -371,14 +374,11 @@ export default function ListingForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+
+    if (!validateForm()) return;
 
     // For new listings, require phone verification
     if (!isEdit && !verificationToken) {
-      if (!form.phone) {
-        setError('شماره تلفن الزامی است');
-        return;
-      }
       setPendingSubmit(true);
       setShowOtpModal(true);
       return;
