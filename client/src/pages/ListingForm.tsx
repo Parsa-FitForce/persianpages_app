@@ -8,7 +8,7 @@ import { countries, cities, searchCities, getCountryByCode, type Country, type C
 import { resolveImageUrl } from '../utils/image';
 import { useGoogleMaps } from '../hooks/useGoogleMaps';
 import AddressAutocomplete from '../components/AddressAutocomplete';
-import { AsYouType, parsePhoneNumberFromString, isValidPhoneNumber } from 'libphonenumber-js';
+import { AsYouType, parsePhoneNumberFromString } from 'libphonenumber-js/max';
 
 function formatPhoneNumber(raw: string, countryCode: string): string {
   // Strip non-digit/+ chars for processing
@@ -306,9 +306,10 @@ export default function ListingForm() {
     }
 
     // Validate phone number
-    const phoneDigits = form.phone.replace(/\s/g, '');
-    if (phoneDigits && phoneDigits !== validCountry.dialCode) {
-      if (!isValidPhoneNumber(phoneDigits)) {
+    const phoneRaw = form.phone.replace(/\s/g, '');
+    if (phoneRaw && phoneRaw !== validCountry.dialCode) {
+      const parsed = parsePhoneNumberFromString(phoneRaw, validCountry.code.toUpperCase() as any);
+      if (!parsed || !parsed.isValid()) {
         setError('شماره تلفن وارد شده معتبر نیست');
         return;
       }
@@ -318,9 +319,10 @@ export default function ListingForm() {
     }
 
     // Validate whatsapp if provided
-    const waDigits = form.whatsapp.replace(/\s/g, '');
-    if (waDigits && waDigits !== validCountry.dialCode) {
-      if (!isValidPhoneNumber(waDigits)) {
+    const waRaw = form.whatsapp.replace(/\s/g, '');
+    if (waRaw && waRaw !== validCountry.dialCode) {
+      const parsedWa = parsePhoneNumberFromString(waRaw, validCountry.code.toUpperCase() as any);
+      if (!parsedWa || !parsedWa.isValid()) {
         setError('شماره واتساپ وارد شده معتبر نیست');
         return;
       }
