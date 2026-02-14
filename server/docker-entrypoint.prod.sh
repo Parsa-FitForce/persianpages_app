@@ -25,7 +25,7 @@ fi
 
 # Sync database schema
 echo "Syncing database schema..."
-npx prisma db push --skip-generate
+npx prisma db push --skip-generate --accept-data-loss
 
 # Seed database (idempotent - uses upsert)
 echo "Seeding database..."
