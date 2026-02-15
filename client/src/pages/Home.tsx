@@ -69,30 +69,30 @@ export default function Home() {
       </Helmet>
 
       {/* Hero */}
-      <section className="bg-gradient-to-bl from-primary-600 to-primary-800 text-white py-16">
+      <section className="bg-gradient-to-bl from-primary-600 to-primary-800 text-white py-8 md:py-16">
         <div className="max-w-4xl mx-auto px-4 text-center">
           {selectedCountry ? (
             <>
-              <div className="text-5xl mb-4">{selectedCountry.flag}</div>
-              <h1 className="text-3xl md:text-4xl font-bold mb-3">
+              <div className="text-4xl md:text-5xl mb-2 md:mb-4">{selectedCountry.flag}</div>
+              <h1 className="text-2xl md:text-4xl font-bold mb-1 md:mb-3">
                 کسب‌وکارهای ایرانی در {selectedCountry.name}
               </h1>
-              <p className="text-lg text-primary-100 mb-2">
+              <p className="text-sm md:text-lg text-primary-100">
                 {countryCities.length.toLocaleString('fa-IR')} شهر
               </p>
             </>
           ) : (
             <>
-              <h1 className="text-4xl md:text-5xl font-bold mb-4">
+              <h1 className="text-2xl md:text-5xl font-bold mb-2 md:mb-4">
                 راهنمای کسب‌وکارهای ایرانی در سراسر جهان
               </h1>
-              <p className="text-lg text-primary-100 mb-8">
+              <p className="text-sm md:text-lg text-primary-100 mb-4 md:mb-8">
                 به راحتی کسب‌وکارهای ایرانی را در شهر خود پیدا کنید
               </p>
             </>
           )}
 
-          <form onSubmit={handleSearch} className="max-w-2xl mx-auto mt-6">
+          <form onSubmit={handleSearch} className="max-w-2xl mx-auto mt-4 md:mt-6">
             <div className="flex gap-2">
               <input
                 type="text"
@@ -109,12 +109,12 @@ export default function Home() {
 
           {/* Quick City Links */}
           {countryCities.length > 0 && (
-            <div className="mt-6 flex flex-wrap justify-center gap-2">
+            <div className="mt-3 md:mt-6 flex flex-wrap justify-center gap-1.5 md:gap-2">
               {countryCities.slice(0, 8).map((city) => (
                 <button
                   key={city.nameEn}
                   onClick={() => navigate(`/search?country=${countryCode}&city=${encodeURIComponent(city.name)}`)}
-                  className="px-3 py-1 bg-white/20 rounded-full text-sm hover:bg-white/30 transition-colors"
+                  className="px-2.5 py-0.5 md:px-3 md:py-1 bg-white/20 rounded-full text-xs md:text-sm hover:bg-white/30 transition-colors"
                 >
                   {city.name}
                 </button>
@@ -122,7 +122,7 @@ export default function Home() {
               {countryCities.length > 8 && (
                 <button
                   onClick={() => navigate(`/search?country=${countryCode}`)}
-                  className="px-3 py-1 bg-white/20 rounded-full text-sm hover:bg-white/30 transition-colors"
+                  className="px-2.5 py-0.5 md:px-3 md:py-1 bg-white/20 rounded-full text-xs md:text-sm hover:bg-white/30 transition-colors"
                 >
                   +{(countryCities.length - 8).toLocaleString('fa-IR')} شهر دیگر
                 </button>
@@ -133,12 +133,12 @@ export default function Home() {
       </section>
 
       {/* Categories */}
-      <section className="max-w-7xl mx-auto px-4 py-12">
-        <h2 className="text-2xl font-bold mb-6">دسته‌بندی‌ها</h2>
+      <section className="max-w-7xl mx-auto px-4 py-6 md:py-12">
+        <h2 className="text-lg md:text-2xl font-bold mb-3 md:mb-6">دسته‌بندی‌ها</h2>
         {loading ? (
           <div className="text-center text-gray-500">در حال بارگذاری...</div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-5 gap-2 md:gap-4">
             {categories.map((cat) => (
               <CategoryCard key={cat.id} category={cat} countryCode={countryCode} />
             ))}
@@ -147,9 +147,9 @@ export default function Home() {
       </section>
 
       {/* Recent Listings */}
-      <section className="max-w-7xl mx-auto px-4 pb-16">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold">
+      <section className="max-w-7xl mx-auto px-4 pb-8 md:pb-16">
+        <div className="flex justify-between items-center mb-4 md:mb-6">
+          <h2 className="text-lg md:text-2xl font-bold">
             {selectedCountry ? `کسب‌وکارهای ${selectedCountry.name}` : 'کسب‌وکارهای اخیر'}
           </h2>
           <button
@@ -169,7 +169,7 @@ export default function Home() {
             }
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
             {listings.map((listing) => (
               <ListingCard key={listing.id} listing={listing} />
             ))}

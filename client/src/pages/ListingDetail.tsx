@@ -86,7 +86,7 @@ export default function ListingDetail() {
   const listingDescription = listing.description.slice(0, 160);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-4xl mx-auto px-4 py-4 md:py-8">
       <Helmet>
         <title>{listingTitle}</title>
         <meta name="description" content={listingDescription} />
@@ -115,9 +115,9 @@ export default function ListingDetail() {
       </Helmet>
 
       {/* Header */}
-      <div className="flex justify-between items-start mb-6">
+      <div className="flex justify-between items-start mb-4 md:mb-6">
         <div>
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-1 md:mb-2">
             <span className="text-sm text-gray-500">
               {listing.category.icon} {listing.category.nameFa}
             </span>
@@ -132,7 +132,7 @@ export default function ListingDetail() {
               </span>
             )}
           </div>
-          <h1 className="text-3xl font-bold mb-2">{listing.title}</h1>
+          <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2">{listing.title}</h1>
           <p className="text-gray-600">📍 {listing.city}، {listing.country}</p>
         </div>
         <div className="flex gap-2">

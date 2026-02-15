@@ -69,13 +69,13 @@ export default function Search() {
       </Helmet>
 
       {/* Search Header */}
-      <div className="bg-gradient-to-l from-primary-600 to-primary-700 text-white py-8">
+      <div className="bg-gradient-to-l from-primary-600 to-primary-700 text-white py-4 md:py-8">
         <div className="max-w-5xl mx-auto px-4">
-          <div className="flex items-center gap-3 mb-6">
+          <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-6">
             {selectedCountry && (
-              <span className="text-3xl">{selectedCountry.flag}</span>
+              <span className="text-2xl md:text-3xl">{selectedCountry.flag}</span>
             )}
-            <h1 className="text-2xl font-bold">
+            <h1 className="text-lg md:text-2xl font-bold">
               {selectedCountry
                 ? `جستجو در ${selectedCountry.name}`
                 : 'جستجوی کسب‌وکار'}
@@ -89,10 +89,10 @@ export default function Search() {
               value={search}
               onChange={(e) => updateFilter('search', e.target.value)}
               placeholder="نام کسب‌وکار، خدمات یا محصول..."
-              className="w-full px-5 py-4 pr-12 rounded-2xl text-gray-900 text-lg shadow-lg focus:ring-4 focus:ring-white/30 outline-none"
+              className="w-full px-4 py-3 pr-10 md:px-5 md:py-4 md:pr-12 rounded-xl md:rounded-2xl text-gray-900 text-base md:text-lg shadow-lg focus:ring-4 focus:ring-white/30 outline-none"
             />
             <svg
-              className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+              className="absolute right-3 md:right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -103,14 +103,14 @@ export default function Search() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 py-6">
-        {/* Category Pills */}
-        <div className="mb-6">
-          <h3 className="text-sm font-medium text-gray-500 mb-3">دسته‌بندی</h3>
-          <div className="flex flex-wrap gap-2">
+      <div className="max-w-5xl mx-auto px-4 py-4 md:py-6">
+        {/* Category Pills — horizontal scroll on mobile */}
+        <div className="mb-4 md:mb-6">
+          <h3 className="text-sm font-medium text-gray-500 mb-2 md:mb-3">دسته‌بندی</h3>
+          <div className="flex md:flex-wrap gap-2 overflow-x-auto pb-1 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide">
             <button
               onClick={() => updateFilter('category', '')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+              className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap shrink-0 ${
                 !categorySlug
                   ? 'bg-primary-600 text-white shadow-md'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -122,7 +122,7 @@ export default function Search() {
               <button
                 key={cat.id}
                 onClick={() => updateFilter('category', cat.slug)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${
+                className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                   categorySlug === cat.slug
                     ? 'bg-primary-600 text-white shadow-md'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -135,14 +135,14 @@ export default function Search() {
           </div>
         </div>
 
-        {/* City Pills */}
+        {/* City Pills — horizontal scroll on mobile */}
         {countryCities.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-500 mb-3">شهر</h3>
-            <div className="flex flex-wrap gap-2">
+          <div className="mb-4 md:mb-6">
+            <h3 className="text-sm font-medium text-gray-500 mb-2 md:mb-3">شهر</h3>
+            <div className="flex md:flex-wrap gap-2 overflow-x-auto pb-1 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide">
               <button
                 onClick={() => updateFilter('city', '')}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap shrink-0 ${
                   !city
                     ? 'bg-primary-600 text-white shadow-md'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -154,7 +154,7 @@ export default function Search() {
                 <button
                   key={c.nameEn}
                   onClick={() => updateFilter('city', c.name)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                  className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap shrink-0 ${
                     city === c.name
                       ? 'bg-primary-600 text-white shadow-md'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -227,7 +227,7 @@ export default function Search() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6 mb-8">
               {listings.map((listing) => (
                 <ListingCard key={listing.id} listing={listing} />
               ))}
