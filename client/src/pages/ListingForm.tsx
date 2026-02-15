@@ -74,6 +74,12 @@ export default function ListingForm() {
   const [countrySearch, setCountrySearch] = useState('');
   const [citySearch, setCitySearch] = useState('');
 
+  const dayKeys = ['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const;
+  const dayLabels: Record<string, string> = {
+    saturday: 'شنبه', sunday: 'یکشنبه', monday: 'دوشنبه', tuesday: 'سه‌شنبه',
+    wednesday: 'چهارشنبه', thursday: 'پنج‌شنبه', friday: 'جمعه',
+  };
+
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -88,6 +94,7 @@ export default function ListingForm() {
     whatsapp: '',
     photos: [] as string[],
     isActive: true,
+    businessHours: {} as Record<string, { open: string; close: string; closed: boolean }>,
   });
 
   useEffect(() => {
@@ -106,6 +113,20 @@ export default function ListingForm() {
     if (isEdit && id) {
       listingsApi.getOne(id).then((res) => {
         const l = res.data;
+        // Parse business hours from DB format
+        const parsedHours: Record<string, { open: string; close: string; closed: boolean }> = {};
+        if (l.businessHours) {
+          for (const [day, val] of Object.entries(l.businessHours)) {
+            const key = day.toLowerCase();
+            if (typeof val === 'string') {
+              const parts = val.split(' - ');
+              parsedHours[key] = { open: parts[0] || '', close: parts[1] || '', closed: false };
+            } else if (val && typeof val === 'object') {
+              parsedHours[key] = { open: (val as any).open || '', close: (val as any).close || '', closed: false };
+            }
+          }
+        }
+
         setForm({
           title: l.title,
           description: l.description,
@@ -120,6 +141,7 @@ export default function ListingForm() {
           whatsapp: l.socialLinks?.whatsapp || '',
           photos: l.photos.length > 0 ? l.photos : [],
           isActive: l.isActive,
+          businessHours: parsedHours,
         });
         if (l.latitude != null) setLatitude(l.latitude);
         if (l.longitude != null) setLongitude(l.longitude);
@@ -337,6 +359,14 @@ export default function ListingForm() {
 
     setLoading(true);
 
+    // Build businessHours for DB — only include non-closed days with valid times
+    const businessHours: Record<string, string> = {};
+    for (const [day, val] of Object.entries(form.businessHours)) {
+      if (!val.closed && val.open && val.close) {
+        businessHours[day] = `${val.open} - ${val.close}`;
+      }
+    }
+
     const data: any = {
       title: form.title,
       description: form.description,
@@ -351,6 +381,7 @@ export default function ListingForm() {
         telegram: form.telegram || undefined,
         whatsapp: stripPhoneForStorage(form.whatsapp) || undefined,
       },
+      businessHours: Object.keys(businessHours).length > 0 ? businessHours : undefined,
       photos: form.photos.filter((p) => p.trim()),
       isActive: form.isActive,
       latitude: latitude || undefined,
@@ -459,7 +490,7 @@ export default function ListingForm() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              توضیحات *
+              درباره کسب‌وکار *
             </label>
             <textarea
               name="description"
@@ -672,6 +703,58 @@ export default function ListingForm() {
                 placeholder="https://"
               />
             </div>
+          </div>
+        </div>
+
+        {/* Business Hours */}
+        <div className="card p-6 space-y-4">
+          <h2 className="font-semibold">ساعات کاری</h2>
+          <div className="space-y-3">
+            {dayKeys.map((day) => {
+              const val = form.businessHours[day] || { open: '', close: '', closed: false };
+              const updateDay = (field: string, value: string | boolean) => {
+                setForm((prev) => ({
+                  ...prev,
+                  businessHours: {
+                    ...prev.businessHours,
+                    [day]: { ...prev.businessHours[day] || { open: '', close: '', closed: false }, [field]: value },
+                  },
+                }));
+              };
+              return (
+                <div key={day} className="flex items-center gap-3">
+                  <span className="w-20 text-sm text-gray-700 shrink-0">{dayLabels[day]}</span>
+                  <label className="flex items-center gap-1.5 shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={val.closed}
+                      onChange={(e) => updateDay('closed', e.target.checked)}
+                      className="w-4 h-4 text-primary-600 rounded"
+                    />
+                    <span className="text-sm text-gray-500">تعطیل</span>
+                  </label>
+                  {!val.closed && (
+                    <>
+                      <input
+                        type="time"
+                        value={val.open}
+                        onChange={(e) => updateDay('open', e.target.value)}
+                        className="input w-32 text-sm text-center"
+                        dir="ltr"
+                      />
+                      <span className="text-gray-400 text-sm">تا</span>
+                      <input
+                        type="time"
+                        value={val.close}
+                        onChange={(e) => updateDay('close', e.target.value)}
+                        className="input w-32 text-sm text-center"
+                        dir="ltr"
+                      />
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 

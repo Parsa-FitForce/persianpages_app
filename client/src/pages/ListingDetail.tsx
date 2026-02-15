@@ -193,23 +193,54 @@ export default function ListingDetail() {
             <p className="text-gray-700 whitespace-pre-line">{listing.description}</p>
           </div>
 
-          {listing.businessHours && Object.keys(listing.businessHours).length > 0 && (
-            <div className="card p-6">
-              <h2 className="font-semibold mb-4">ساعات کاری</h2>
-              <div className="space-y-2">
-                {Object.entries(listing.businessHours).map(([day, hours]) => (
-                  <div key={day} className="flex justify-between text-sm">
-                    <span className="text-gray-600">{day}</span>
-                    <span>
-                      {typeof hours === 'string'
-                        ? hours
-                        : `${(hours as any).open} - ${(hours as any).close}`}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Map */}
+          <div className="card p-6">
+            <h2 className="font-semibold mb-4">نقشه</h2>
+            {listing.latitude && listing.longitude && isLoaded ? (
+              <>
+                <div className="rounded-xl overflow-hidden mb-3" style={{ height: 300 }}>
+                  <GoogleMap
+                    center={{ lat: listing.latitude, lng: listing.longitude }}
+                    zoom={15}
+                    mapContainerStyle={{ width: '100%', height: '100%' }}
+                    options={{ disableDefaultUI: true, zoomControl: true }}
+                  >
+                    <MarkerF position={{ lat: listing.latitude, lng: listing.longitude }} />
+                  </GoogleMap>
+                </div>
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${listing.latitude},${listing.longitude}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary w-full text-center block"
+                >
+                  مسیریابی
+                </a>
+              </>
+            ) : (
+              <>
+                <div className="rounded-xl overflow-hidden mb-3" style={{ height: 300 }}>
+                  <iframe
+                    title="نقشه"
+                    width="100%"
+                    height="100%"
+                    style={{ border: 0 }}
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    src={`https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(listing.address + ', ' + listing.city + ', ' + listing.country)}`}
+                  />
+                </div>
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(listing.address + ', ' + listing.city + ', ' + listing.country)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary w-full text-center block"
+                >
+                  مسیریابی
+                </a>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Sidebar */}
@@ -252,54 +283,38 @@ export default function ListingDetail() {
             </div>
           </div>
 
-          {/* Map */}
-          <div className="card p-6">
-            <h2 className="font-semibold mb-4">نقشه</h2>
-            {listing.latitude && listing.longitude && isLoaded ? (
-              <>
-                <div className="rounded-xl overflow-hidden mb-3" style={{ height: 200 }}>
-                  <GoogleMap
-                    center={{ lat: listing.latitude, lng: listing.longitude }}
-                    zoom={15}
-                    mapContainerStyle={{ width: '100%', height: '100%' }}
-                    options={{ disableDefaultUI: true, zoomControl: true }}
-                  >
-                    <MarkerF position={{ lat: listing.latitude, lng: listing.longitude }} />
-                  </GoogleMap>
+          {listing.businessHours && Object.keys(listing.businessHours).length > 0 && (() => {
+            const dayOrder = ['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+            const daysFa: Record<string, string> = {
+              saturday: 'شنبه', sunday: 'یکشنبه', monday: 'دوشنبه', tuesday: 'سه‌شنبه',
+              wednesday: 'چهارشنبه', thursday: 'پنج‌شنبه', friday: 'جمعه',
+            };
+            const toFaDigits = (s: string) => s.replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]);
+            const hoursMap = Object.fromEntries(
+              Object.entries(listing.businessHours!).map(([k, v]) => [k.toLowerCase(), v])
+            );
+            return (
+              <div className="card p-6">
+                <h2 className="font-semibold mb-4">ساعات کاری</h2>
+                <div className="space-y-2">
+                  {dayOrder.map((day) => {
+                    const hours = hoursMap[day];
+                    const timeStr = !hours
+                      ? 'تعطیل'
+                      : typeof hours === 'string'
+                        ? toFaDigits(hours)
+                        : toFaDigits(`${(hours as any).open} - ${(hours as any).close}`);
+                    return (
+                      <div key={day} className="flex justify-between text-sm">
+                        <span className={!hours ? 'text-red-400' : ''} dir="ltr">{timeStr}</span>
+                        <span className="text-gray-600">{daysFa[day]}</span>
+                      </div>
+                    );
+                  })}
                 </div>
-                <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${listing.latitude},${listing.longitude}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-primary w-full text-center block"
-                >
-                  مسیریابی
-                </a>
-              </>
-            ) : (
-              <>
-                <div className="rounded-xl overflow-hidden mb-3" style={{ height: 200 }}>
-                  <iframe
-                    title="نقشه"
-                    width="100%"
-                    height="100%"
-                    style={{ border: 0 }}
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    src={`https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(listing.address + ', ' + listing.city + ', ' + listing.country)}`}
-                  />
-                </div>
-                <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(listing.address + ', ' + listing.city + ', ' + listing.country)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-primary w-full text-center block"
-                >
-                  مسیریابی
-                </a>
-              </>
-            )}
-          </div>
+              </div>
+            );
+          })()}
 
           {listing.socialLinks && Object.keys(listing.socialLinks).length > 0 && (
             <div className="card p-6">

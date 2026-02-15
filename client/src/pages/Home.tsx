@@ -78,7 +78,7 @@ export default function Home() {
                 کسب‌وکارهای ایرانی در {selectedCountry.name}
               </h1>
               <p className="text-lg text-primary-100 mb-2">
-                {countryCities.length} شهر
+                {countryCities.length.toLocaleString('fa-IR')} شهر
               </p>
             </>
           ) : (
@@ -124,7 +124,7 @@ export default function Home() {
                   onClick={() => navigate(`/search?country=${countryCode}`)}
                   className="px-3 py-1 bg-white/20 rounded-full text-sm hover:bg-white/30 transition-colors"
                 >
-                  +{countryCities.length - 8} شهر دیگر
+                  +{(countryCities.length - 8).toLocaleString('fa-IR')} شهر دیگر
                 </button>
               )}
             </div>

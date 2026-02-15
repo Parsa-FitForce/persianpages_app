@@ -210,7 +210,7 @@ export default function Search() {
         {/* Results Count */}
         <div className="flex items-center justify-between mb-6">
           <p className="text-gray-600">
-            <span className="font-semibold text-gray-900">{total}</span> کسب‌وکار یافت شد
+            <span className="font-semibold text-gray-900">{total.toLocaleString('fa-IR')}</span> کسب‌وکار یافت شد
           </p>
         </div>
 
@@ -265,7 +265,7 @@ export default function Search() {
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }`}
                       >
-                        {pageNum}
+                        {pageNum.toLocaleString('fa-IR')}
                       </button>
                     );
                   })}
