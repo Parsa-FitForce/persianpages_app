@@ -4,10 +4,9 @@ import { countries, getCountryByCode, type Country } from '../i18n/locations';
 
 interface Props {
   compact?: boolean;
-  showLabel?: boolean;
 }
 
-export default function CountrySelector({ compact = false, showLabel = false }: Props) {
+export default function CountrySelector({ compact = false }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
