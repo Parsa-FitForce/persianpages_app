@@ -62,7 +62,7 @@ interface GooglePlace {
   id: string;
   displayName?: { text: string; languageCode?: string };
   formattedAddress?: string;
-  nationalPhoneNumber?: string;
+  internationalPhoneNumber?: string;
   websiteUri?: string;
   location?: { latitude: number; longitude: number };
   regularOpeningHours?: {
@@ -242,7 +242,7 @@ async function searchGooglePlaces(query: string, apiKey: string): Promise<Google
     'places.id',
     'places.displayName',
     'places.formattedAddress',
-    'places.nationalPhoneNumber',
+    'places.internationalPhoneNumber',
     'places.websiteUri',
     'places.location',
     'places.regularOpeningHours',
@@ -458,7 +458,9 @@ async function importListings(
         title: cls.title,
         description: cls.description,
         slug,
-        phone: place.nationalPhoneNumber || null,
+        phone: place.internationalPhoneNumber
+          ? place.internationalPhoneNumber.replace(/[\s\-\(\)]/g, '')
+          : null,
         address: place.formattedAddress || '',
         city: cityConfig.name,
         country: cityConfig.country,

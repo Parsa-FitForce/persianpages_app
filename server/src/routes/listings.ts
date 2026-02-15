@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { authenticate, optionalAuth } from '../middleware/auth.js';
-import { normalizePhone } from '../utils/phone.js';
+import { normalizePhone, toE164 } from '../utils/phone.js';
 import { generateUniqueSlug } from '../utils/slug.js';
 
 const router = Router();
@@ -131,6 +131,9 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'لطفا فیلدهای الزامی را پر کنید (تلفن الزامی است)' });
     }
 
+    // Normalize phone to E.164
+    const normalizedPhone = toE164(phone) || phone;
+
     const category = await prisma.category.findUnique({ where: { id: categoryId } });
     if (!category) {
       return res.status(400).json({ error: 'دسته‌بندی نامعتبر است' });
@@ -142,7 +145,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       data: {
         title,
         description,
-        phone,
+        phone: normalizedPhone,
         address,
         city,
         country,
@@ -204,9 +207,12 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
       verificationToken,
     } = req.body;
 
+    // Normalize phone to E.164 if provided
+    const normalizedPhone = phone ? (toE164(phone) || phone) : undefined;
+
     // If phone changed, reset phoneVerified
     let phoneVerified = undefined;
-    if (phone !== undefined && normalizePhone(phone) !== normalizePhone(existing.phone || '')) {
+    if (normalizedPhone !== undefined && normalizePhone(normalizedPhone) !== normalizePhone(existing.phone || '')) {
       phoneVerified = false;
     }
 
@@ -223,7 +229,7 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
           return res.status(403).json({ error: 'توکن تایید نامعتبر است' });
         }
 
-        const currentPhone = phone || existing.phone;
+        const currentPhone = normalizedPhone || existing.phone;
         if (currentPhone && normalizePhone(decoded.phone) !== normalizePhone(currentPhone)) {
           return res.status(400).json({ error: 'شماره تلفن با شماره تایید شده مطابقت ندارد' });
         }
@@ -256,7 +262,7 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
         title,
         description,
         categoryId,
-        phone,
+        phone: normalizedPhone,
         address,
         city,
         country,

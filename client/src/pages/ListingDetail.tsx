@@ -9,6 +9,7 @@ import OtpVerifyModal from '../components/OtpVerifyModal';
 import { useGoogleMaps } from '../hooks/useGoogleMaps';
 import { getLocalBusinessSchema, getBreadcrumbSchema } from '../utils/structuredData';
 import { resolveImageUrl } from '../utils/image';
+import { parsePhoneNumberFromString } from 'libphonenumber-js';
 
 export default function ListingDetail() {
   const { id } = useParams<{ id: string }>();
@@ -248,14 +249,18 @@ export default function ListingDetail() {
           <div className="card p-6">
             <h2 className="font-semibold mb-4">اطلاعات تماس</h2>
             <div className="space-y-3">
-              {listing.phone && (
-                <div className="flex items-center gap-3">
-                  <span className="text-gray-400">📞</span>
-                  <a href={`tel:${listing.phone}`} className="hover:text-primary-600" dir="ltr">
-                    {listing.phone}
-                  </a>
-                </div>
-              )}
+              {listing.phone && (() => {
+                const parsed = parsePhoneNumberFromString(listing.phone);
+                const display = parsed ? parsed.formatInternational() : listing.phone;
+                return (
+                  <div className="flex items-center gap-3">
+                    <span className="text-gray-400">📞</span>
+                    <a href={`tel:${listing.phone}`} className="hover:text-primary-600" dir="ltr">
+                      {display}
+                    </a>
+                  </div>
+                );
+              })()}
               <div className="flex items-center gap-3">
                 <span className="text-gray-400">📍</span>
                 <a
