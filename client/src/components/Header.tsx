@@ -53,9 +53,7 @@ export default function Header() {
             <Link to="/" className="text-xl font-bold text-primary-600 whitespace-nowrap">
               پرشین‌پیجز
             </Link>
-            <div className="hidden sm:block">
-              <CountrySelector compact />
-            </div>
+            <CountrySelector compact />
           </div>
 
           {/* Desktop nav */}
@@ -146,11 +144,6 @@ export default function Header() {
           <div className="fixed inset-0 z-40 bg-black/20" onClick={closeMenu} />
           <div className="md:hidden absolute top-16 inset-x-0 z-50 bg-white border-t border-gray-100 shadow-lg">
             <div className="max-w-7xl mx-auto px-4 py-4 space-y-2">
-              {/* Country selector */}
-              <div className="pb-3 mb-2 border-b border-gray-100">
-                <CountrySelector compact showLabel />
-              </div>
-
               {navLink('/search', 'جستجو', closeMenu)}
 
               {user ? (
