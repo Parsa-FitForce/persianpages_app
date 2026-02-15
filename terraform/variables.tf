@@ -101,6 +101,19 @@ variable "twilio_messaging_sid" {
   default     = ""
 }
 
+variable "anthropic_api_key" {
+  description = "Anthropic API key for scraping pipeline"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "google_places_api_key" {
+  description = "Google Places API key for scraping pipeline"
+  type        = string
+  default     = ""
+}
+
 # ECS Configuration
 variable "ecs_cpu" {
   description = "ECS task CPU units (256, 512, 1024, 2048, 4096)"

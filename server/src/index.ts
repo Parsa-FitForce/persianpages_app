@@ -9,6 +9,7 @@ import sitemapRoutes from './routes/sitemap.js';
 import uploadRoutes, { UPLOADS_DIR } from './routes/upload.js';
 import verificationRoutes from './routes/verification.js';
 import metaRoutes from './routes/meta.js';
+import scrapeRoutes from './routes/scrape.js';
 import { PrismaClient } from '@prisma/client';
 
 const app = express();
@@ -35,6 +36,7 @@ app.use('/api', sitemapRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/meta', metaRoutes);
+app.use('/api/scrape', scrapeRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

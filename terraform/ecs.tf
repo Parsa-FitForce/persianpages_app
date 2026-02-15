@@ -194,6 +194,14 @@ resource "aws_ecs_task_definition" "api" {
         {
           name      = "TWILIO_MESSAGING_SID"
           valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:TWILIO_MESSAGING_SID::"
+        },
+        {
+          name      = "ANTHROPIC_API_KEY"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:ANTHROPIC_API_KEY::"
+        },
+        {
+          name      = "GOOGLE_PLACES_API_KEY"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:GOOGLE_PLACES_API_KEY::"
         }
       ]
 

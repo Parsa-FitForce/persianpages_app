@@ -28,6 +28,9 @@ RUN npm run build
 # Compile seed script for production (tsx not available in prod image)
 RUN npx esbuild prisma/seed.ts --bundle --platform=node --outfile=prisma/seed.js --external:@prisma/client --external:bcryptjs
 
+# Compile scrape script for production
+RUN npx esbuild scripts/scrape.ts --bundle --platform=node --outfile=scripts/scrape.js --external:@prisma/client
+
 # Stage 2: Production
 FROM node:20-alpine AS production
 
@@ -51,6 +54,10 @@ COPY --from=builder /app/dist ./dist
 
 # Copy compiled seed script
 COPY --from=builder /app/prisma/seed.js ./prisma/seed.js
+
+# Copy compiled scrape script
+RUN mkdir -p scripts
+COPY --from=builder /app/scripts/scrape.js ./scripts/scrape.js
 
 # Copy production entrypoint script
 COPY docker-entrypoint.prod.sh ./docker-entrypoint.sh
