@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { authenticate } from '../middleware/auth.js';
 import { normalizePhone, maskPhone, isValidE164 } from '../utils/phone.js';
-import { generateOTP, sendSms, sendVoiceCall } from '../services/twilio.js';
+import { generateOTP, sendSms, sendVoiceCall, sendVerification, checkVerification, useVerifyApi } from '../services/twilio.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -92,25 +92,42 @@ router.post('/send', authenticate, async (req: Request, res: Response) => {
       }
     }
 
-    const code = generateOTP();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-    await prisma.phoneVerification.create({
-      data: {
-        phone: normalized,
-        code,
-        channel,
-        expiresAt,
-        userId: req.user!.id,
-        listingId: listingId || null,
-      },
-    });
+    if (useVerifyApi) {
+      // Twilio Verify handles OTP generation and delivery
+      await prisma.phoneVerification.create({
+        data: {
+          phone: normalized,
+          code: 'verify-api',
+          channel,
+          expiresAt,
+          userId: req.user!.id,
+          listingId: listingId || null,
+        },
+      });
 
-    // Send OTP via Twilio
-    if (channel === 'call') {
-      await sendVoiceCall(normalized, code);
+      await sendVerification(normalized, channel);
     } else {
-      await sendSms(normalized, code);
+      // Fallback: custom OTP via Messaging API
+      const code = generateOTP();
+
+      await prisma.phoneVerification.create({
+        data: {
+          phone: normalized,
+          code,
+          channel,
+          expiresAt,
+          userId: req.user!.id,
+          listingId: listingId || null,
+        },
+      });
+
+      if (channel === 'call') {
+        await sendVoiceCall(normalized, code);
+      } else {
+        await sendSms(normalized, code);
+      }
     }
 
     res.json({ message: 'کد تایید ارسال شد', expiresAt: expiresAt.toISOString() });
@@ -156,7 +173,17 @@ router.post('/confirm', authenticate, async (req: Request, res: Response) => {
       data: { attempts: { increment: 1 } },
     });
 
-    if (verification.code !== code) {
+    let isValid = false;
+
+    if (useVerifyApi) {
+      // Twilio Verify checks the code server-side
+      isValid = await checkVerification(normalized, code);
+    } else {
+      // Fallback: compare code from DB
+      isValid = verification.code === code;
+    }
+
+    if (!isValid) {
       return res.status(400).json({ error: 'کد تایید اشتباه است' });
     }
 

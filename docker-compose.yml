@@ -32,6 +32,7 @@ services:
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
       TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
       TWILIO_MESSAGING_SID: ${TWILIO_MESSAGING_SID:-}
+      TWILIO_VERIFY_SID: ${TWILIO_VERIFY_SID:-}
       SES_FROM_EMAIL: noreply@persianpages.com
       SES_REGION: us-east-1
       AWS_REGION: us-east-1
