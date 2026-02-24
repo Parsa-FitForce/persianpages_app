@@ -20,6 +20,14 @@ export interface ScrapeResult {
   listings: string[];
 }
 
+export interface BackfillResult {
+  total: number;
+  updated: number;
+  failed: number;
+  skipped: number;
+  details: string[];
+}
+
 export async function runScrape(
   prisma: PrismaClient,
   options: ScrapeOptions,
@@ -30,4 +38,12 @@ export async function runScrape(
   const scriptPath = resolve(__dirname, '../../scripts/scrape.js');
   const mod = require(scriptPath);
   return mod.runScrape(prisma, options);
+}
+
+export async function backfillPhotos(
+  prisma: PrismaClient,
+): Promise<BackfillResult> {
+  const scriptPath = resolve(__dirname, '../../scripts/scrape.js');
+  const mod = require(scriptPath);
+  return mod.backfillPhotos(prisma);
 }

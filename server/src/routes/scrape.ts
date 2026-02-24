@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
-import { runScrape, ScrapeResult } from '../services/scrape.js';
+import { runScrape, ScrapeResult, backfillPhotos } from '../services/scrape.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -53,6 +53,30 @@ router.get('/:jobId', (req: Request, res: Response) => {
   }
 
   res.json({ jobId: req.params.jobId, ...job });
+});
+
+// POST /api/scrape/backfill-photos — add photos to listings that are missing them
+router.post('/backfill-photos', (req: Request, res: Response) => {
+  const apiKey = req.headers['x-scrape-key'];
+  const expectedKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || apiKey !== expectedKey) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const jobId = `backfill-${Date.now()}`;
+  jobs.set(jobId, { status: 'running' });
+
+  backfillPhotos(prisma)
+    .then(result => {
+      jobs.set(jobId, { status: 'completed', result: result as any });
+      console.log(`Backfill job ${jobId} completed: ${result.updated} updated`);
+    })
+    .catch(err => {
+      jobs.set(jobId, { status: 'failed', error: err.message });
+      console.error(`Backfill job ${jobId} failed:`, err);
+    });
+
+  res.json({ jobId, status: 'started' });
 });
 
 // POST /api/scrape/fix-phones — one-time migration to normalize phone numbers to E.164

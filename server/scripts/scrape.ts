@@ -650,6 +650,100 @@ export async function runScrape(
   return result;
 }
 
+// ── Backfill Photos ───────────────────────────────────────────────────
+
+export interface BackfillResult {
+  total: number;
+  updated: number;
+  failed: number;
+  skipped: number;
+  details: string[];
+}
+
+export async function backfillPhotos(
+  prisma: PrismaClient,
+): Promise<BackfillResult> {
+  const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
+  if (!googleApiKey) throw new Error('Missing GOOGLE_PLACES_API_KEY');
+
+  // Find listings with placeId but no photos
+  const listings = await prisma.listing.findMany({
+    where: {
+      placeId: { not: null },
+      OR: [
+        { photos: { isEmpty: true } },
+        { photos: { equals: [] } },
+      ],
+    },
+    select: { id: true, title: true, placeId: true },
+  });
+
+  console.log(`Backfill: Found ${listings.length} listings without photos`);
+
+  let updated = 0;
+  let failed = 0;
+  let skipped = 0;
+  const details: string[] = [];
+
+  for (const listing of listings) {
+    try {
+      // Fetch place details with photos from Google Places API
+      const res = await fetch(`https://places.googleapis.com/v1/places/${listing.placeId}`, {
+        headers: {
+          'X-Goog-Api-Key': googleApiKey,
+          'X-Goog-FieldMask': 'id,photos',
+        },
+      });
+
+      if (!res.ok) {
+        const msg = `HTTP ${res.status} for ${listing.placeId}`;
+        console.error(`  Skip ${listing.title}: ${msg}`);
+        details.push(`FAILED: ${listing.title} - ${msg}`);
+        failed++;
+        continue;
+      }
+
+      const placeData = await res.json() as GooglePlace;
+      const photoRef = placeData.photos?.[0];
+      if (!photoRef?.name) {
+        details.push(`SKIPPED: ${listing.title} - no photo available`);
+        skipped++;
+        continue;
+      }
+
+      // Download and upload the photo
+      const photoResult = await downloadAndUploadPhoto(
+        { ...placeData, id: listing.placeId! } as GooglePlace,
+        googleApiKey,
+      );
+
+      if (photoResult) {
+        await prisma.listing.update({
+          where: { id: listing.id },
+          data: {
+            photos: [photoResult.url],
+            photoAttributions: { [photoResult.url]: photoResult.attribution },
+          },
+        });
+        details.push(`OK: ${listing.title}`);
+        updated++;
+      } else {
+        details.push(`FAILED: ${listing.title} - download failed`);
+        failed++;
+      }
+
+      // Rate limit
+      await new Promise(r => setTimeout(r, 250));
+    } catch (err) {
+      details.push(`FAILED: ${listing.title} - ${err}`);
+      failed++;
+    }
+  }
+
+  console.log(`Backfill done: ${updated} updated, ${failed} failed, ${skipped} skipped`);
+  return { total: listings.length, updated, failed, skipped, details };
+}
+
 // ── CLI entrypoint ─────────────────────────────────────────────────────
 
 if (require.main === module) {
