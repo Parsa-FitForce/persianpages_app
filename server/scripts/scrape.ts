@@ -16,8 +16,9 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { existsSync, readFileSync } from 'fs';
-import { resolve } from 'path';
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
+import { resolve, join } from 'path';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 // ── Load .env (for local CLI use only) ─────────────────────────────────
 
@@ -71,6 +72,10 @@ interface GooglePlace {
       close: { day: number; hour: number; minute: number };
     }>;
   };
+  photos?: Array<{
+    name: string;
+    authorAttributions?: Array<{ displayName?: string; uri?: string }>;
+  }>;
 }
 
 interface ClaudeResult {
@@ -246,6 +251,7 @@ async function searchGooglePlaces(query: string, apiKey: string): Promise<Google
     'places.websiteUri',
     'places.location',
     'places.regularOpeningHours',
+    'places.photos',
   ].join(',');
 
   const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
@@ -390,6 +396,54 @@ Respond with ONLY a JSON array of objects, one per business, in the same order. 
   return results;
 }
 
+// ── Photo Download ──────────────────────────────────────────────────────
+
+async function downloadAndUploadPhoto(
+  place: GooglePlace,
+  apiKey: string,
+): Promise<{ url: string; attribution: string } | null> {
+  const photoRef = place.photos?.[0];
+  if (!photoRef?.name) return null;
+
+  try {
+    const mediaUrl = `https://places.googleapis.com/v1/${photoRef.name}/media?maxHeightPx=800&key=${apiKey}`;
+    const res = await fetch(mediaUrl);
+    if (!res.ok) {
+      console.error(`  Photo download failed (${res.status}) for ${place.id}`);
+      return null;
+    }
+
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const attribution = photoRef.authorAttributions?.[0]?.displayName || 'Google';
+
+    const S3_BUCKET = process.env.S3_UPLOADS_BUCKET;
+    const S3_REGION = process.env.S3_UPLOADS_REGION || 'us-east-1';
+    const filename = `uploads/scraped/${place.id}.jpg`;
+
+    if (S3_BUCKET) {
+      const s3 = new S3Client({ region: S3_REGION });
+      await s3.send(new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: filename,
+        Body: buffer,
+        ContentType: 'image/jpeg',
+      }));
+      const url = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${filename}`;
+      return { url, attribution };
+    } else {
+      const localDir = join(process.cwd(), 'uploads', 'scraped');
+      if (!existsSync(localDir)) mkdirSync(localDir, { recursive: true });
+      const localPath = join(localDir, `${place.id}.jpg`);
+      writeFileSync(localPath, buffer);
+      const url = `/uploads/scraped/${place.id}.jpg`;
+      return { url, attribution };
+    }
+  } catch (err) {
+    console.error(`  Photo error for ${place.id}: ${err}`);
+    return null;
+  }
+}
+
 // ── Import to DB ───────────────────────────────────────────────────────
 
 async function importListings(
@@ -398,6 +452,7 @@ async function importListings(
   cityConfig: CityConfig,
   prisma: PrismaClient,
   limit: number,
+  googleApiKey: string,
 ): Promise<{ imported: number; filtered: number; listings: string[] }> {
   const categories = await prisma.category.findMany();
   const categoryMap: Record<string, string> = {};
@@ -453,6 +508,13 @@ async function importListings(
       }
     }
 
+    // Download photo from Google Places
+    const photoResult = await downloadAndUploadPhoto(place, googleApiKey);
+    const photos = photoResult ? [photoResult.url] : [];
+    const photoAttributions = photoResult
+      ? { [photoResult.url]: photoResult.attribution }
+      : undefined;
+
     await prisma.listing.create({
       data: {
         title: cls.title,
@@ -469,13 +531,17 @@ async function importListings(
         placeId: place.id,
         website: place.websiteUri || null,
         businessHours,
-        photos: [],
+        photos,
+        photoAttributions,
         source: 'scraped',
         isClaimed: false,
         claimedAt: null,
         categoryId,
       },
     });
+
+    // Rate-limit photo downloads
+    if (photoResult) await new Promise(r => setTimeout(r, 200));
 
     const line = `${englishName} → ${cls.title} (${cls.categorySlug})`;
     console.log(`  + ${line}`);
@@ -561,7 +627,7 @@ export async function runScrape(
   // Step 4: Import
   console.log('Step 4: Importing into database...');
   const { imported, filtered, listings } = await importListings(
-    newPlaces, classifications, cityConfig, prisma, limit,
+    newPlaces, classifications, cityConfig, prisma, limit, googleApiKey,
   );
 
   const result: ScrapeResult = {

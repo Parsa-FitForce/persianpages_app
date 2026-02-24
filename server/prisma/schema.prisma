@@ -50,8 +50,9 @@ model Listing {
   website       String?
   socialLinks   Json?
   businessHours Json?
-  photos        String[]
-  phoneVerified Boolean  @default(false)
+  photos            String[]
+  photoAttributions Json?
+  phoneVerified     Boolean  @default(false)
   isActive      Boolean  @default(true)
   source        String   @default("user") // "user" or "scraped"
   isClaimed     Boolean  @default(true)
