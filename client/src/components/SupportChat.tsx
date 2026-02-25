@@ -68,7 +68,6 @@ export default function SupportChat({
   const [started, setStarted] = useState(!!conversationId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastMessageTime = useRef<string | null>(null);
 
   // Update name/email when user changes
   useEffect(() => {
@@ -82,18 +81,15 @@ export default function SupportChat({
 
     const fetchMessages = async () => {
       try {
-        const params = lastMessageTime.current ? `?after=${lastMessageTime.current}` : '';
-        const res = await fetch(`${supportUrl}/api/conversations/${conversationId}/messages${params}`);
+        const res = await fetch(`${supportUrl}/api/conversations/${conversationId}/messages`);
         if (!res.ok) return;
         const data = await res.json();
-        if (data.messages.length > 0) {
-          if (lastMessageTime.current) {
-            setMessages(prev => [...prev, ...data.messages]);
-          } else {
-            setMessages(data.messages);
-          }
-          lastMessageTime.current = data.messages[data.messages.length - 1].createdAt;
-        }
+        setMessages(prev => {
+          // Keep optimistic messages not yet confirmed by server
+          const serverIds = new Set(data.messages.map((m: Message) => m.id));
+          const pending = prev.filter(m => m.id.startsWith('temp-') && !serverIds.has(m.id));
+          return [...data.messages, ...pending];
+        });
       } catch {
         // silently ignore poll errors
       }
@@ -132,7 +128,6 @@ export default function SupportChat({
       setConversationId(data.conversationId);
       localStorage.setItem(`support_conversation_${appId}`, data.conversationId);
       setStarted(true);
-      lastMessageTime.current = null;
       setInput('');
     } catch (error) {
       console.error('Failed to start conversation:', error);
@@ -168,7 +163,6 @@ export default function SupportChat({
       setMessages(prev =>
         prev.map(m => (m.id === optimistic.id ? data.message : m))
       );
-      lastMessageTime.current = data.message.createdAt;
     } catch {
       // Remove optimistic on failure
       setMessages(prev => prev.filter(m => m.id !== optimistic.id));
@@ -191,7 +185,6 @@ export default function SupportChat({
     setConversationId(null);
     setMessages([]);
     setStarted(false);
-    lastMessageTime.current = null;
   };
 
   return (
@@ -210,15 +203,15 @@ export default function SupportChat({
       {isOpen && (
         <div className={`fixed ${buttonPosition} z-50 w-full sm:w-[380px] h-[100dvh] sm:h-[500px] sm:rounded-2xl bg-white dark:bg-stone-900 shadow-2xl flex flex-col overflow-hidden border border-stone-200 dark:border-stone-700`}>
           {/* Header */}
-          <div className={`${theme.primary} ${theme.text} px-4 py-3 flex items-center justify-between shrink-0`} dir="rtl">
-            <span className="font-semibold text-sm">پشتیبانی</span>
+          <div className={`${theme.primary} ${theme.text} px-4 py-3 flex items-center justify-between shrink-0`}>
+            <span className="font-semibold text-sm">Support Chat</span>
             <div className="flex items-center gap-2">
               {started && (
                 <button
                   onClick={newConversation}
                   className="text-xs opacity-80 hover:opacity-100 underline"
                 >
-                  گفتگوی جدید
+                  New chat
                 </button>
               )}
               <button onClick={() => setIsOpen(false)} className="hover:opacity-80">
@@ -228,34 +221,33 @@ export default function SupportChat({
           </div>
 
           {/* Messages / Start form */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3" dir="rtl">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {!started ? (
               <div className="space-y-3">
                 <p className="text-sm text-stone-600 dark:text-stone-400">
-                  سلام! پیام خود را ارسال کنید، به زودی پاسخ می‌دهیم.
+                  Hi there! Send us a message and we'll get back to you shortly.
                 </p>
                 {!user && (
                   <>
                     <input
                       type="text"
-                      placeholder="نام شما"
+                      placeholder="Your name"
                       value={name}
                       onChange={e => setName(e.target.value)}
                       className="w-full px-3 py-2 text-sm rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <input
                       type="email"
-                      placeholder="ایمیل شما"
+                      placeholder="Your email"
                       value={email}
                       onChange={e => setEmail(e.target.value)}
                       className="w-full px-3 py-2 text-sm rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      dir="ltr"
                     />
                   </>
                 )}
                 {user && (
                   <p className="text-xs text-stone-500 dark:text-stone-500">
-                    در حال گفتگو به عنوان <span className="font-medium text-stone-700 dark:text-stone-300">{user.name}</span>
+                    Chatting as <span className="font-medium text-stone-700 dark:text-stone-300">{user.name}</span>
                   </p>
                 )}
               </div>
@@ -264,7 +256,7 @@ export default function SupportChat({
                 {messages.map(msg => (
                   <div
                     key={msg.id}
-                    className={`flex ${msg.sender === 'visitor' ? 'justify-start' : 'justify-end'}`}
+                    className={`flex ${msg.sender === 'visitor' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
                       className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap ${
@@ -279,7 +271,7 @@ export default function SupportChat({
                 ))}
                 {messages.length === 0 && (
                   <p className="text-sm text-stone-400 dark:text-stone-500 text-center py-4">
-                    در انتظار پیام...
+                    Waiting for messages...
                   </p>
                 )}
                 <div ref={messagesEndRef} />
@@ -288,13 +280,13 @@ export default function SupportChat({
           </div>
 
           {/* Input */}
-          <div className="p-3 border-t border-stone-200 dark:border-stone-700 shrink-0" dir="rtl">
+          <div className="p-3 border-t border-stone-200 dark:border-stone-700 shrink-0">
             <div className="flex items-end gap-2">
               <textarea
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={started ? 'پیام خود را بنویسید...' : 'چطور می‌توانیم کمکتان کنیم؟'}
+                placeholder={started ? 'Type a message...' : 'How can we help?'}
                 rows={1}
                 className="flex-1 px-3 py-2 text-sm rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 max-h-24"
               />
