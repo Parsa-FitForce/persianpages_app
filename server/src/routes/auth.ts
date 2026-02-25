@@ -45,6 +45,15 @@ router.post('/register', async (req: Request, res: Response) => {
       console.error('Failed to send verification email:', err);
     });
 
+    // Notify support service of new signup (non-blocking)
+    if (process.env.SUPPORT_SERVICE_URL) {
+      fetch(`${process.env.SUPPORT_SERVICE_URL}/api/notifications/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appId: 'persianpages', name, email }),
+      }).catch(() => {});
+    }
+
     const token = generateToken(user.id);
     res.status(201).json({
       user: { id: user.id, email: user.email, name: user.name, emailVerified: false },

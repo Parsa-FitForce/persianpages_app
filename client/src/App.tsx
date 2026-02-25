@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
+import SupportChat from './components/SupportChat';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import EmailVerificationBanner from './components/EmailVerificationBanner';
@@ -56,8 +57,17 @@ function GuestRoute({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  const { user } = useAuth();
+
   return (
     <div className="min-h-screen bg-gray-50">
+      <SupportChat
+        appId="persianpages"
+        supportUrl={import.meta.env.VITE_SUPPORT_URL || 'http://localhost:5005'}
+        user={user ? { name: user.name, email: user.email } : null}
+        theme={{ primary: 'bg-primary-600', primaryHover: 'hover:bg-primary-700', text: 'text-white' }}
+        buttonPosition="bottom-6 left-6"
+      />
       <Routes>
         {/* Select Country - No Header */}
         <Route path="/select-country" element={<SelectCountry />} />

@@ -36,6 +36,7 @@ services:
       SES_FROM_EMAIL: noreply@persianpages.com
       SES_REGION: us-east-1
       AWS_REGION: us-east-1
+      SUPPORT_SERVICE_URL: http://host.docker.internal:5005
     ports:
       - "5001:5001"
     volumes:
@@ -54,6 +55,7 @@ services:
     container_name: persianpages_client
     environment:
       VITE_API_URL: http://localhost:5001/api
+      VITE_SUPPORT_URL: http://localhost:5005
       VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY}
     ports:
       - "3000:3000"
