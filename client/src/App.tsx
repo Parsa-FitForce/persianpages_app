@@ -65,6 +65,7 @@ export default function App() {
         appId="persianpages"
         supportUrl={import.meta.env.VITE_SUPPORT_URL || 'http://localhost:5005'}
         user={user ? { name: user.name, email: user.email } : null}
+        locale="fa"
         theme={{ primary: 'bg-primary-600', primaryHover: 'hover:bg-primary-700', text: 'text-white' }}
         buttonPosition="bottom-6 left-6"
       />
