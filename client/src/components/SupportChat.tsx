@@ -98,7 +98,10 @@ export default function SupportChat({
 
   const t = STRINGS[locale];
   const isRtl = locale === 'fa';
-  const smPosition = buttonPosition.split(' ').map(c => `sm:${c}`).join(' ');
+  // Use static class literals so Tailwind JIT can scan them
+  const desktopPanelPosition = buttonPosition.includes('left-')
+    ? 'sm:bottom-6 sm:left-6'
+    : 'sm:bottom-6 sm:right-6';
 
   // Update name/email when user changes
   useEffect(() => {
@@ -234,7 +237,7 @@ export default function SupportChat({
       {isOpen && (
         <div
           dir={isRtl ? 'rtl' : undefined}
-          className={`fixed inset-0 sm:inset-auto ${smPosition} z-50 sm:w-[380px] sm:h-[500px] sm:rounded-2xl bg-white dark:bg-stone-900 shadow-2xl flex flex-col overflow-hidden border border-stone-200 dark:border-stone-700`}
+          className={`fixed inset-0 sm:inset-auto ${desktopPanelPosition} z-50 sm:w-[380px] sm:h-[500px] sm:rounded-2xl bg-white dark:bg-stone-900 shadow-2xl flex flex-col overflow-hidden border border-stone-200 dark:border-stone-700`}
         >
           {/* Header */}
           <div className={`${theme.primary} ${theme.text} px-4 py-3 flex items-center justify-between shrink-0`}>
