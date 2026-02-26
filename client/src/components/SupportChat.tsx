@@ -227,7 +227,7 @@ export default function SupportChat({
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className={`fixed ${buttonPosition} z-50 w-14 h-14 rounded-full ${theme.primary} ${theme.primaryHover} ${theme.text} shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-105`}
+          className={`fixed ${buttonPosition} z-[60] w-14 h-14 rounded-full ${theme.primary} ${theme.primaryHover} ${theme.text} shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-105`}
         >
           <ChatIcon className="w-6 h-6" />
         </button>
@@ -237,7 +237,7 @@ export default function SupportChat({
       {isOpen && (
         <div
           dir={isRtl ? 'rtl' : undefined}
-          className={`fixed inset-0 sm:inset-auto ${desktopPanelPosition} z-50 sm:w-[380px] sm:h-[500px] sm:rounded-2xl bg-white dark:bg-stone-900 shadow-2xl flex flex-col overflow-hidden border border-stone-200 dark:border-stone-700`}
+          className={`fixed inset-0 sm:inset-auto ${desktopPanelPosition} z-[60] sm:w-[380px] sm:h-[500px] sm:rounded-2xl bg-white dark:bg-stone-900 shadow-2xl flex flex-col overflow-hidden border border-stone-200 dark:border-stone-700`}
         >
           {/* Header */}
           <div className={`${theme.primary} ${theme.text} px-4 py-3 flex items-center justify-between shrink-0`}>
