@@ -65,7 +65,7 @@ export default function CountrySelector({ compact = false }: Props) {
         {isOpen && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-            <div className="absolute left-0 sm:right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-100 z-50 max-h-80 overflow-y-auto">
+            <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-100 z-50 max-h-80 overflow-y-auto">
               <button
                 onClick={() => handleSelect(null)}
                 className={`w-full px-4 py-3 text-right hover:bg-gray-50 flex items-center gap-3 ${
