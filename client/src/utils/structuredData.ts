@@ -62,6 +62,25 @@ export function getLocalBusinessSchema(listing: Listing) {
   return schema;
 }
 
+export function getCollectionPageSchema(params: {
+  name: string;
+  description: string;
+  url: string;
+}) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: params.name,
+    description: params.description,
+    url: params.url,
+    isPartOf: {
+      '@type': 'WebSite',
+      name: 'پرشین‌پیجز',
+      url: 'https://persianpages.com',
+    },
+  };
+}
+
 export function getBreadcrumbSchema(items: { name: string; url: string }[]) {
   return {
     '@context': 'https://schema.org',

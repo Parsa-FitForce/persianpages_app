@@ -8,7 +8,7 @@ interface Props {
 
 export default function CategoryCard({ category, countryCode }: Props) {
   const searchUrl = countryCode
-    ? `/search?category=${category.slug}&country=${countryCode}`
+    ? `/browse/${countryCode}/category/${category.slug}`
     : `/search?category=${category.slug}`;
 
   return (

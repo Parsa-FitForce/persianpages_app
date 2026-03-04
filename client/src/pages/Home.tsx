@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { categoriesApi, listingsApi } from '../services/api';
 import type { Category, Listing } from '../types';
-import { getCountryByCode, getCitiesByCountry } from '../i18n/locations';
+import { getCountryByCode, getCitiesByCountry, toSlug } from '../i18n/locations';
 import CategoryCard from '../components/CategoryCard';
 import ListingCard from '../components/ListingCard';
 import { getWebsiteSchema } from '../utils/structuredData';
@@ -113,7 +113,7 @@ export default function Home() {
               {countryCities.slice(0, 8).map((city) => (
                 <button
                   key={city.nameEn}
-                  onClick={() => navigate(`/search?country=${countryCode}&city=${encodeURIComponent(city.name)}`)}
+                  onClick={() => navigate(`/browse/${countryCode}/${toSlug(city.nameEn)}`)}
                   className="px-2.5 py-0.5 md:px-3 md:py-1 bg-white/20 rounded-full text-xs md:text-sm hover:bg-white/30 transition-colors"
                 >
                   {city.name}
@@ -121,7 +121,7 @@ export default function Home() {
               ))}
               {countryCities.length > 8 && (
                 <button
-                  onClick={() => navigate(`/search?country=${countryCode}`)}
+                  onClick={() => navigate(`/browse/${countryCode}`)}
                   className="px-2.5 py-0.5 md:px-3 md:py-1 bg-white/20 rounded-full text-xs md:text-sm hover:bg-white/30 transition-colors"
                 >
                   +{(countryCities.length - 8).toLocaleString('fa-IR')} شهر دیگر

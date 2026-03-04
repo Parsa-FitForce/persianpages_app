@@ -19,6 +19,7 @@ import VerifyEmail from './pages/VerifyEmail';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Terms from './pages/Terms';
 import Settings from './pages/Settings';
+import BrowsePage from './pages/BrowsePage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -84,6 +85,10 @@ export default function App() {
                 <Routes>
                   <Route path="/" element={<Home />} />
                   <Route path="/search" element={<Search />} />
+                  <Route path="/browse/:countryCode" element={<BrowsePage />} />
+                  <Route path="/browse/:countryCode/category/:categorySlug" element={<BrowsePage />} />
+                  <Route path="/browse/:countryCode/:citySlug" element={<BrowsePage />} />
+                  <Route path="/browse/:countryCode/:citySlug/:categorySlug" element={<BrowsePage />} />
                   <Route path="/listing/:id" element={<ListingDetail />} />
 
                   <Route

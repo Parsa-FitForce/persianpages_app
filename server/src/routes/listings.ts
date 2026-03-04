@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { authenticate, optionalAuth } from '../middleware/auth.js';
 import { normalizePhone, toE164 } from '../utils/phone.js';
 import { generateUniqueSlug } from '../utils/slug.js';
+import { invalidateSitemapCache } from './sitemap.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -166,6 +167,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       },
     });
 
+    invalidateSitemapCache();
     res.status(201).json(listing);
   } catch (error) {
     console.error('Create listing error:', error);
@@ -283,6 +285,7 @@ router.put('/:id', authenticate, async (req: Request, res: Response) => {
       },
     });
 
+    invalidateSitemapCache();
     res.json(listing);
   } catch (error) {
     console.error('Update listing error:', error);
@@ -306,6 +309,7 @@ router.delete('/:id', authenticate, async (req: Request, res: Response) => {
     }
 
     await prisma.listing.delete({ where: { id: req.params.id } });
+    invalidateSitemapCache();
     res.json({ message: 'کسب‌وکار با موفقیت حذف شد' });
   } catch (error) {
     console.error('Delete listing error:', error);

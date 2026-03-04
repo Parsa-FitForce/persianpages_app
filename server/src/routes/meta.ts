@@ -8,6 +8,34 @@ const SITE_NAME = 'PersianPages';
 const SITE_URL = 'https://persianpages.com';
 const DEFAULT_IMAGE = `${SITE_URL}/og-default.png`;
 
+// Country code to Persian name mapping (matches client locations.ts)
+const COUNTRY_NAMES: Record<string, { name: string; nameEn: string }> = {
+  us: { name: 'آمریکا', nameEn: 'United States' },
+  ca: { name: 'کانادا', nameEn: 'Canada' },
+  de: { name: 'آلمان', nameEn: 'Germany' },
+  ae: { name: 'امارات', nameEn: 'UAE' },
+  tr: { name: 'ترکیه', nameEn: 'Turkey' },
+  gb: { name: 'انگلستان', nameEn: 'United Kingdom' },
+  se: { name: 'سوئد', nameEn: 'Sweden' },
+  au: { name: 'استرالیا', nameEn: 'Australia' },
+  fr: { name: 'فرانسه', nameEn: 'France' },
+  nl: { name: 'هلند', nameEn: 'Netherlands' },
+  at: { name: 'اتریش', nameEn: 'Austria' },
+  it: { name: 'ایتالیا', nameEn: 'Italy' },
+  es: { name: 'اسپانیا', nameEn: 'Spain' },
+  no: { name: 'نروژ', nameEn: 'Norway' },
+  dk: { name: 'دانمارک', nameEn: 'Denmark' },
+  be: { name: 'بلژیک', nameEn: 'Belgium' },
+  ch: { name: 'سوئیس', nameEn: 'Switzerland' },
+  nz: { name: 'نیوزیلند', nameEn: 'New Zealand' },
+  jp: { name: 'ژاپن', nameEn: 'Japan' },
+  my: { name: 'مالزی', nameEn: 'Malaysia' },
+};
+
+function slugToCity(slug: string): string {
+  return slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 const FALLBACK_META = {
   title: `${SITE_NAME} | دایرکتوری مشاغل ایرانی`,
   description: 'دایرکتوری آنلاین مشاغل ایرانی در کانادا - رستوران، پزشک، وکیل، املاک و خدمات ایرانی',
@@ -22,6 +50,78 @@ const FALLBACK_META = {
     description: 'دایرکتوری آنلاین مشاغل ایرانی در کانادا',
   },
 };
+
+// Browse: country page meta
+router.get('/browse/:countryCode', async (req: Request, res: Response) => {
+  try {
+    const country = COUNTRY_NAMES[req.params.countryCode];
+    if (!country) return res.json(FALLBACK_META);
+
+    const listingCount = await prisma.listing.count({
+      where: { country: country.name, isActive: true },
+    });
+
+    const url = `${SITE_URL}/browse/${req.params.countryCode}`;
+    const title = `کسب‌وکارهای ایرانی در ${country.name} | ${SITE_NAME}`;
+    const description = `مشاهده ${listingCount} کسب‌وکار ایرانی در ${country.name} - ${SITE_NAME}`;
+
+    return res.json({
+      title,
+      description,
+      image: DEFAULT_IMAGE,
+      url,
+      type: 'CollectionPage',
+      jsonLd: {
+        '@context': 'https://schema.org',
+        '@type': 'CollectionPage',
+        name: title,
+        description,
+        url,
+        isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL },
+      },
+    });
+  } catch (error) {
+    console.error('Meta API error:', error);
+    res.json(FALLBACK_META);
+  }
+});
+
+// Browse: city page meta
+router.get('/browse/:countryCode/:citySlug', async (req: Request, res: Response) => {
+  try {
+    const country = COUNTRY_NAMES[req.params.countryCode];
+    if (!country) return res.json(FALLBACK_META);
+
+    const cityName = slugToCity(req.params.citySlug);
+
+    const listingCount = await prisma.listing.count({
+      where: { country: country.name, city: { contains: cityName, mode: 'insensitive' }, isActive: true },
+    });
+
+    const url = `${SITE_URL}/browse/${req.params.countryCode}/${req.params.citySlug}`;
+    const title = `کسب‌وکارهای ایرانی در ${cityName}, ${country.name} | ${SITE_NAME}`;
+    const description = `مشاهده ${listingCount} کسب‌وکار ایرانی در ${cityName} - ${SITE_NAME}`;
+
+    return res.json({
+      title,
+      description,
+      image: DEFAULT_IMAGE,
+      url,
+      type: 'CollectionPage',
+      jsonLd: {
+        '@context': 'https://schema.org',
+        '@type': 'CollectionPage',
+        name: title,
+        description,
+        url,
+        isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL },
+      },
+    });
+  } catch (error) {
+    console.error('Meta API error:', error);
+    res.json(FALLBACK_META);
+  }
+});
 
 router.get('/:type/:id', async (req: Request, res: Response) => {
   const { type, id } = req.params;

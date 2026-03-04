@@ -205,6 +205,15 @@ export const cities: City[] = [
   { name: 'پنانگ', nameEn: 'Penang', country: 'my' },
 ];
 
+// Slug helpers
+export const toSlug = (nameEn: string): string => {
+  return nameEn.toLowerCase().replace(/\s+/g, '-');
+};
+
+export const getCityBySlug = (countryCode: string, slug: string): City | undefined => {
+  return cities.find(c => c.country === countryCode && toSlug(c.nameEn) === slug);
+};
+
 // Helper functions
 export const getCountryByCode = (code: string): Country | undefined => {
   return countries.find(c => c.code === code);

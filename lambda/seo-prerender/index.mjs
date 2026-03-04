@@ -5,12 +5,22 @@ const BOT_UA_PATTERN = /googlebot|bingbot|yandex|baiduspider|facebookexternalhit
 const ROUTE_PATTERNS = [
   { pattern: /^\/listing\/([^/]+)\/?$/, type: 'listing', idIndex: 1 },
   { pattern: /^\/category\/([^/]+)\/?$/, type: 'category', idIndex: 1 },
+  { pattern: /^\/browse\/([a-z]{2})\/?$/, type: 'browse-country', idIndex: 1 },
+  { pattern: /^\/browse\/([a-z]{2})\/category\/([^/]+)\/?$/, type: 'browse-country', idIndex: 1 },
+  { pattern: /^\/browse\/([a-z]{2})\/([^/]+)\/?$/, type: 'browse-city', idIndex: 0 },
+  { pattern: /^\/browse\/([a-z]{2})\/([^/]+)\/([^/]+)\/?$/, type: 'browse-city', idIndex: 0 },
 ];
 
 function parseRoute(uri) {
   for (const route of ROUTE_PATTERNS) {
     const match = uri.match(route.pattern);
     if (match) {
+      if (route.type === 'browse-country') {
+        return { type: 'browse-country', id: match[1] };
+      }
+      if (route.type === 'browse-city') {
+        return { type: 'browse-city', id: `${match[1]}/${match[2]}` };
+      }
       return { type: route.type, id: match[route.idIndex] };
     }
   }
@@ -201,7 +211,15 @@ export async function handler(event) {
     data = HOMEPAGE_META;
   } else {
     const apiHost = 'api.persianpages.com';
-    data = await fetchJson(apiHost, `/api/meta/${route.type}/${route.id}`);
+    let metaPath;
+    if (route.type === 'browse-country') {
+      metaPath = `/api/meta/browse/${route.id}`;
+    } else if (route.type === 'browse-city') {
+      metaPath = `/api/meta/browse/${route.id}`;
+    } else {
+      metaPath = `/api/meta/${route.type}/${route.id}`;
+    }
+    data = await fetchJson(apiHost, metaPath);
   }
 
   if (!data) {
