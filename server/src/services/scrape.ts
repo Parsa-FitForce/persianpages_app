@@ -6,6 +6,7 @@ export interface ScrapeOptions {
   dryRun?: boolean;
   limit?: number;
   country?: string;
+  source?: 'google' | 'yelp';
 }
 
 export interface ScrapeResult {

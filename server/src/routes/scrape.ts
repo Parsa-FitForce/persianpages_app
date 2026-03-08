@@ -19,13 +19,13 @@ router.post('/', (req: Request, res: Response) => {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { city, limit = 10, dryRun = false, country } = req.body;
+  const { city, limit = 10, dryRun = false, country, source = 'google' } = req.body;
   const jobId = `scrape-${Date.now()}`;
 
   jobs.set(jobId, { status: 'running' });
 
   // Fire and forget — runs in background
-  runScrape(prisma, { city, limit, dryRun, country })
+  runScrape(prisma, { city, limit, dryRun, country, source })
     .then(result => {
       jobs.set(jobId, { status: 'completed', result });
       console.log(`Scrape job ${jobId} completed: ${result.imported} imported for ${result.city}`);

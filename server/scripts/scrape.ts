@@ -92,6 +92,7 @@ export interface ScrapeOptions {
   dryRun?: boolean;
   limit?: number;
   country?: string;
+  source?: 'google' | 'yelp';
 }
 
 export interface ScrapeResult {
@@ -335,21 +336,152 @@ async function fetchAllPlaces(city: string, apiKey: string): Promise<GooglePlace
   return Array.from(seen.values());
 }
 
+// ── Yelp Fusion API ─────────────────────────────────────────────────────
+
+interface YelpBusiness {
+  id: string;
+  name: string;
+  phone?: string;
+  display_phone?: string;
+  location?: {
+    address1?: string;
+    address2?: string;
+    city?: string;
+    state?: string;
+    zip_code?: string;
+    country?: string;
+    display_address?: string[];
+  };
+  coordinates?: { latitude: number; longitude: number };
+  url?: string;
+  image_url?: string;
+  categories?: Array<{ alias: string; title: string }>;
+  hours?: Array<{
+    open: Array<{
+      day: number;
+      start: string;
+      end: string;
+      is_overnight: boolean;
+    }>;
+  }>;
+}
+
+function yelpToGooglePlace(biz: YelpBusiness): GooglePlace {
+  const address = biz.location?.display_address?.join(', ') || '';
+
+  let hours: GooglePlace['regularOpeningHours'] = undefined;
+  if (biz.hours?.[0]?.open) {
+    hours = {
+      periods: biz.hours[0].open.map(h => ({
+        open: {
+          day: h.day,
+          hour: parseInt(h.start.slice(0, 2)),
+          minute: parseInt(h.start.slice(2, 4)),
+        },
+        close: {
+          day: h.is_overnight ? (h.day + 1) % 7 : h.day,
+          hour: parseInt(h.end.slice(0, 2)),
+          minute: parseInt(h.end.slice(2, 4)),
+        },
+      })),
+    };
+  }
+
+  return {
+    id: `yelp-${biz.id}`,
+    displayName: { text: biz.name },
+    formattedAddress: address,
+    internationalPhoneNumber: biz.phone || undefined,
+    websiteUri: biz.url || undefined,
+    location: biz.coordinates ? {
+      latitude: biz.coordinates.latitude,
+      longitude: biz.coordinates.longitude,
+    } : undefined,
+    regularOpeningHours: hours,
+    photos: biz.image_url ? [{ name: biz.image_url }] : undefined,
+  };
+}
+
+async function searchYelpBusinesses(
+  term: string,
+  location: string,
+  apiKey: string,
+): Promise<YelpBusiness[]> {
+  const params = new URLSearchParams({
+    term,
+    location,
+    limit: '50',
+  });
+
+  const res = await fetch(`https://api.yelp.com/v3/businesses/search?${params}`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error(`  Yelp API error (${res.status}): ${text}`);
+    return [];
+  }
+
+  const data = await res.json();
+  return data.businesses || [];
+}
+
+async function fetchAllPlacesYelp(city: string, apiKey: string): Promise<GooglePlace[]> {
+  const seen = new Map<string, GooglePlace>();
+
+  for (const term of SEARCH_TERMS) {
+    for (const prefix of SEARCH_PREFIXES) {
+      const query = `${prefix} ${term}`;
+      console.log(`  Searching Yelp: "${query}" in ${city}`);
+      const businesses = await searchYelpBusinesses(query, city, apiKey);
+      for (const biz of businesses) {
+        const key = `yelp-${biz.id}`;
+        if (!seen.has(key)) {
+          seen.set(key, yelpToGooglePlace(biz));
+        }
+      }
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+
+  return Array.from(seen.values());
+}
+
 // ── Dedup against DB ───────────────────────────────────────────────────
 
 async function dedup(places: GooglePlace[], prisma: PrismaClient): Promise<GooglePlace[]> {
   if (places.length === 0) return [];
 
+  // Dedup by placeId (same source)
   const placeIds = places.map(p => p.id);
   const existing = await prisma.listing.findMany({
     where: { placeId: { in: placeIds } },
     select: { placeId: true },
   });
-
   const existingIds = new Set(existing.map(e => e.placeId));
-  const fresh = places.filter(p => !existingIds.has(p.id));
 
-  console.log(`  Dedup: ${places.length} total, ${existing.length} already in DB, ${fresh.length} new`);
+  // Cross-source dedup by phone number
+  const phones = places
+    .map(p => p.internationalPhoneNumber?.replace(/[\s\-\(\)]/g, ''))
+    .filter(Boolean) as string[];
+  const existingByPhone = phones.length > 0
+    ? await prisma.listing.findMany({
+        where: { phone: { in: phones } },
+        select: { phone: true },
+      })
+    : [];
+  const existingPhones = new Set(existingByPhone.map(e => e.phone));
+
+  const fresh = places.filter(p => {
+    if (existingIds.has(p.id)) return false;
+    const phone = p.internationalPhoneNumber?.replace(/[\s\-\(\)]/g, '');
+    if (phone && existingPhones.has(phone)) return false;
+    return true;
+  });
+
+  const dupCount = places.length - fresh.length;
+  console.log(`  Dedup: ${places.length} total, ${dupCount} already in DB, ${fresh.length} new`);
   return fresh;
 }
 
@@ -447,7 +579,11 @@ async function downloadAndUploadPhoto(
   if (!photoRef?.name) return null;
 
   try {
-    const mediaUrl = `https://places.googleapis.com/v1/${photoRef.name}/media?maxHeightPx=800&key=${apiKey}`;
+    // Yelp photos are direct URLs; Google photos need the Places media endpoint
+    const isDirectUrl = photoRef.name.startsWith('http');
+    const mediaUrl = isDirectUrl
+      ? photoRef.name
+      : `https://places.googleapis.com/v1/${photoRef.name}/media?maxHeightPx=800&key=${apiKey}`;
     const res = await fetch(mediaUrl);
     if (!res.ok) {
       console.error(`  Photo download failed (${res.status}) for ${place.id}`);
@@ -455,7 +591,9 @@ async function downloadAndUploadPhoto(
     }
 
     const buffer = Buffer.from(await res.arrayBuffer());
-    const attribution = photoRef.authorAttributions?.[0]?.displayName || 'Google';
+    const attribution = isDirectUrl
+      ? 'Yelp'
+      : (photoRef.authorAttributions?.[0]?.displayName || 'Google');
 
     const S3_BUCKET = process.env.S3_UPLOADS_BUCKET;
     const S3_REGION = process.env.S3_UPLOADS_REGION || 'us-east-1';
@@ -599,12 +737,14 @@ export async function runScrape(
   prisma: PrismaClient,
   options: ScrapeOptions = {},
 ): Promise<ScrapeResult> {
-  const { city: cityName, dryRun = false, limit = 10, country } = options;
+  const { city: cityName, dryRun = false, limit = 10, country, source = 'google' } = options;
 
   const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
+  const yelpApiKey = process.env.YELP_API_KEY;
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
 
-  if (!googleApiKey) throw new Error('Missing GOOGLE_PLACES_API_KEY');
+  if (source === 'google' && !googleApiKey) throw new Error('Missing GOOGLE_PLACES_API_KEY');
+  if (source === 'yelp' && !yelpApiKey) throw new Error('Missing YELP_API_KEY');
   if (!anthropicApiKey) throw new Error('Missing ANTHROPIC_API_KEY');
 
   // Resolve city
@@ -618,11 +758,13 @@ export async function runScrape(
   }
 
   console.log(`\n=== Scraping: ${cityConfig.nameEn} (${cityConfig.name}), ${cityConfig.country} ===`);
-  console.log(`  Mode: ${dryRun ? 'DRY RUN' : 'LIVE'}, Limit: ${limit}\n`);
+  console.log(`  Mode: ${dryRun ? 'DRY RUN' : 'LIVE'}, Source: ${source}, Limit: ${limit}\n`);
 
-  // Step 1: Search Google Places
-  console.log('Step 1: Searching Google Places...');
-  const allPlaces = await fetchAllPlaces(cityConfig.nameEn, googleApiKey);
+  // Step 1: Search for businesses
+  console.log(`Step 1: Searching ${source === 'yelp' ? 'Yelp' : 'Google Places'}...`);
+  const allPlaces = source === 'yelp'
+    ? await fetchAllPlacesYelp(cityConfig.nameEn, yelpApiKey!)
+    : await fetchAllPlaces(cityConfig.nameEn, googleApiKey!);
   console.log(`  Found ${allPlaces.length} unique places\n`);
 
   if (allPlaces.length === 0) {
@@ -668,7 +810,7 @@ export async function runScrape(
   // Step 4: Import
   console.log('Step 4: Importing into database...');
   const { imported, filtered, listings } = await importListings(
-    newPlaces, classifications, cityConfig, prisma, limit, googleApiKey,
+    newPlaces, classifications, cityConfig, prisma, limit, source === 'yelp' ? '' : googleApiKey!,
   );
 
   const result: ScrapeResult = {
@@ -795,6 +937,7 @@ if (require.main === module) {
   let dryRun = false;
   let limit = 30;
   let country: string | undefined;
+  let source: 'google' | 'yelp' = 'google';
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -802,11 +945,12 @@ if (require.main === module) {
       case '--dry-run': dryRun = true; break;
       case '--limit': limit = parseInt(args[++i], 10); break;
       case '--country': country = args[++i]; break;
+      case '--source': source = args[++i] as 'google' | 'yelp'; break;
     }
   }
 
   const prisma = new PrismaClient();
-  runScrape(prisma, { city, dryRun, limit, country })
+  runScrape(prisma, { city, dryRun, limit, country, source })
     .then(() => prisma.$disconnect())
     .catch(err => {
       console.error('Fatal error:', err);

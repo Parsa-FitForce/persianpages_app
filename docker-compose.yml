@@ -36,6 +36,9 @@ services:
       SES_FROM_EMAIL: noreply@persianpages.com
       SES_REGION: us-east-1
       AWS_REGION: us-east-1
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:-}
+      YELP_API_KEY: ${YELP_API_KEY:-}
       SUPPORT_SERVICE_URL: http://host.docker.internal:5005
     ports:
       - "5001:5001"
