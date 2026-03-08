@@ -114,6 +114,13 @@ variable "google_places_api_key" {
   default     = ""
 }
 
+variable "yelp_api_key" {
+  description = "Yelp Fusion API key for scraping pipeline (free alternative to Google Places)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 # ECS Configuration
 variable "ecs_cpu" {
   description = "ECS task CPU units (256, 512, 1024, 2048, 4096)"

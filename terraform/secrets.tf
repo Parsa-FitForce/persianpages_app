@@ -24,6 +24,7 @@ resource "aws_secretsmanager_secret_version" "app_secrets" {
     TWILIO_MESSAGING_SID  = var.twilio_messaging_sid
     ANTHROPIC_API_KEY     = var.anthropic_api_key
     GOOGLE_PLACES_API_KEY = var.google_places_api_key
+    YELP_API_KEY          = var.yelp_api_key
   })
 }
 

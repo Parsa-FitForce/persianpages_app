@@ -202,6 +202,10 @@ resource "aws_ecs_task_definition" "api" {
         {
           name      = "GOOGLE_PLACES_API_KEY"
           valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:GOOGLE_PLACES_API_KEY::"
+        },
+        {
+          name      = "YELP_API_KEY"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:YELP_API_KEY::"
         }
       ]
 
