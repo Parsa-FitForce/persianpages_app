@@ -327,7 +327,16 @@ async function enrichListings(prisma: PrismaClient, options: EnrichOptions = {})
     socialLinksAdded: 0, websitesDiscovered: 0, failed: 0, details: [],
   };
 
-  // Find listings with websites that can be enriched
+  // First: clean up Yelp page URLs (they're not real business websites)
+  const yelpCleaned = await prisma.listing.updateMany({
+    where: { website: { contains: 'yelp.com' } },
+    data: { website: null },
+  });
+  if (yelpCleaned.count > 0) {
+    console.log(`Cleaned ${yelpCleaned.count} Yelp URLs from listings`);
+  }
+
+  // Find listings with real websites that can be enriched
   const where: any = {
     isActive: true,
     source: 'scraped',
