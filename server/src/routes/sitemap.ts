@@ -143,6 +143,10 @@ router.get('/sitemap.xml', async (_req: Request, res: Response) => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap>
+    <loc>https://api.persianpages.com/api/sitemap-static.xml</loc>
+    <lastmod>${lastmod}</lastmod>
+  </sitemap>
+  <sitemap>
     <loc>https://api.persianpages.com/api/sitemap-listings.xml</loc>
     <lastmod>${lastmod}</lastmod>
   </sitemap>
@@ -158,6 +162,9 @@ router.get('/sitemap.xml', async (_req: Request, res: Response) => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap>
+    <loc>https://api.persianpages.com/api/sitemap-static.xml</loc>
+  </sitemap>
+  <sitemap>
     <loc>https://api.persianpages.com/api/sitemap-listings.xml</loc>
   </sitemap>
   <sitemap>
@@ -167,6 +174,29 @@ router.get('/sitemap.xml', async (_req: Request, res: Response) => {
     res.set('Content-Type', 'application/xml');
     res.send(xml);
   }
+});
+
+// Static pages sitemap — homepage + select-country
+router.get('/sitemap-static.xml', (_req: Request, res: Response) => {
+  const today = toDate(new Date());
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${SITE_URL}/</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>${SITE_URL}/select-country</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+</urlset>`;
+
+  res.set('Content-Type', 'application/xml');
+  res.send(xml);
 });
 
 // Listings sitemap

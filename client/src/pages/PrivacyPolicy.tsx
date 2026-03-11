@@ -6,6 +6,7 @@ export default function PrivacyPolicy() {
       <Helmet>
         <title>Privacy Policy | حریم خصوصی | PersianPages</title>
         <meta name="description" content="PersianPages privacy policy - how we collect, use, and protect your personal information." />
+        <meta name="robots" content="noindex, follow" />
         <link rel="canonical" href="https://persianpages.com/privacy" />
       </Helmet>
       <div className="max-w-3xl mx-auto px-4 py-10">

@@ -6,6 +6,7 @@ export default function Terms() {
       <Helmet>
         <title>Terms & Conditions | شرایط استفاده | PersianPages</title>
         <meta name="description" content="PersianPages terms and conditions of use." />
+        <meta name="robots" content="noindex, follow" />
         <link rel="canonical" href="https://persianpages.com/terms" />
       </Helmet>
       <div className="max-w-3xl mx-auto px-4 py-10">
