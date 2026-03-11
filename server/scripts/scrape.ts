@@ -392,7 +392,7 @@ function yelpToGooglePlace(biz: YelpBusiness): GooglePlace {
     displayName: { text: biz.name },
     formattedAddress: address,
     internationalPhoneNumber: biz.phone || undefined,
-    websiteUri: biz.url || undefined,
+    websiteUri: undefined, // biz.url is the Yelp page, not the business's own website
     location: biz.coordinates ? {
       latitude: biz.coordinates.latitude,
       longitude: biz.coordinates.longitude,
