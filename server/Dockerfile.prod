@@ -31,6 +31,9 @@ RUN npx esbuild prisma/seed.ts --bundle --platform=node --outfile=prisma/seed.js
 # Compile scrape script for production
 RUN npx esbuild scripts/scrape.ts --bundle --platform=node --outfile=scripts/scrape.js --external:@prisma/client
 
+# Compile enrich script for production
+RUN npx esbuild scripts/enrich.ts --bundle --platform=node --outfile=scripts/enrich.js --external:@prisma/client --external:jsdom --external:@aws-sdk/client-s3
+
 # Stage 2: Production
 FROM node:20-alpine AS production
 
@@ -58,6 +61,7 @@ COPY --from=builder /app/prisma/seed.js ./prisma/seed.js
 # Copy compiled scrape script
 RUN mkdir -p scripts
 COPY --from=builder /app/scripts/scrape.js ./scripts/scrape.js
+COPY --from=builder /app/scripts/enrich.js ./scripts/enrich.js
 
 # Copy production entrypoint script
 COPY docker-entrypoint.prod.sh ./docker-entrypoint.sh

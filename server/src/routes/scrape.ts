@@ -2,12 +2,13 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import { runScrape, ScrapeResult, backfillPhotos } from '../services/scrape.js';
+import { enrichListings, EnrichStats } from '../services/enrich.js';
 
 const router = Router();
 const prisma = new PrismaClient();
 
 // In-memory job tracking
-const jobs: Map<string, { status: string; result?: ScrapeResult; error?: string }> = new Map();
+const jobs: Map<string, { status: string; result?: ScrapeResult | EnrichStats; error?: string }> = new Map();
 
 // POST /api/scrape
 // Starts scrape job asynchronously, returns job ID
@@ -77,6 +78,32 @@ router.post('/backfill-photos', (req: Request, res: Response) => {
     });
 
   res.json({ jobId, status: 'started' });
+});
+
+// POST /api/scrape/enrich — enrich listings by scraping their websites
+router.post('/enrich', (req: Request, res: Response) => {
+  const apiKey = req.headers['x-scrape-key'];
+  const expectedKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || apiKey !== expectedKey) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { limit = 50, city, dryRun = false, id } = req.body;
+  const jobId = `enrich-${Date.now()}`;
+
+  jobs.set(jobId, { status: 'running' });
+
+  enrichListings(prisma, { limit, city, dryRun, id })
+    .then(result => {
+      jobs.set(jobId, { status: 'completed', result });
+      console.log(`Enrich job ${jobId} completed: ${result.descriptionsUpdated} descriptions, ${result.photosAdded} photos`);
+    })
+    .catch(err => {
+      jobs.set(jobId, { status: 'failed', error: err.message });
+      console.error(`Enrich job ${jobId} failed:`, err);
+    });
+
+  res.json({ jobId, status: 'started', limit, city: city || 'all' });
 });
 
 // POST /api/scrape/fix-phones — one-time migration to normalize phone numbers to E.164
