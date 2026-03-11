@@ -11,6 +11,79 @@ import { getLocalBusinessSchema, getBreadcrumbSchema } from '../utils/structured
 import { resolveImageUrl } from '../utils/image';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 
+function PhotoGallery({ photos, title }: { photos: string[]; title: string }) {
+  const [showAll, setShowAll] = useState(false);
+
+  if (photos.length === 0) return null;
+
+  if (photos.length === 1) {
+    return (
+      <div className="mb-6">
+        <img
+          src={resolveImageUrl(photos[0])}
+          alt={title}
+          className="w-full h-64 md:h-80 object-cover rounded-xl"
+        />
+      </div>
+    );
+  }
+
+  const visiblePhotos = showAll ? photos : photos.slice(0, 5);
+  const extraCount = photos.length - 5;
+
+  return (
+    <div className="mb-6">
+      <div className="grid grid-cols-4 grid-rows-2 gap-1.5 rounded-xl overflow-hidden h-64 md:h-80">
+        {/* Main large image */}
+        <div className="col-span-2 row-span-2">
+          <img
+            src={resolveImageUrl(photos[0])}
+            alt={`${title} - 1`}
+            className="w-full h-full object-cover"
+          />
+        </div>
+        {/* Smaller images */}
+        {visiblePhotos.slice(1, 5).map((photo, idx) => (
+          <div key={idx} className="relative">
+            <img
+              src={resolveImageUrl(photo)}
+              alt={`${title} - ${idx + 2}`}
+              className="w-full h-full object-cover"
+            />
+            {/* "Show more" overlay on last visible thumbnail */}
+            {!showAll && idx === Math.min(3, photos.length - 2) && extraCount > 0 && (
+              <button
+                onClick={() => setShowAll(true)}
+                className="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-medium text-sm hover:bg-black/60 transition-colors"
+              >
+                +{extraCount} عکس دیگر
+              </button>
+            )}
+          </div>
+        ))}
+        {/* Fill empty slots if fewer than 5 photos */}
+        {photos.length < 5 &&
+          Array.from({ length: 4 - (photos.length - 1) }).map((_, idx) => (
+            <div key={`empty-${idx}`} className="bg-gray-100" />
+          ))}
+      </div>
+      {/* Expanded view for extra photos */}
+      {showAll && photos.length > 5 && (
+        <div className="grid grid-cols-3 gap-1.5 mt-1.5">
+          {photos.slice(5).map((photo, idx) => (
+            <img
+              key={idx}
+              src={resolveImageUrl(photo)}
+              alt={`${title} - ${idx + 6}`}
+              className="w-full h-40 object-cover rounded-lg"
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ListingDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -171,20 +244,7 @@ export default function ListingDetail() {
       )}
 
       {/* Photos */}
-      {listing.photos.length > 0 && (
-        <div className="mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {listing.photos.map((photo, idx) => (
-              <img
-                key={idx}
-                src={resolveImageUrl(photo)}
-                alt={`${listing.title} - ${idx + 1}`}
-                className="w-full h-64 object-cover rounded-xl"
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      <PhotoGallery photos={listing.photos} title={listing.title} />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {/* Main Content */}
