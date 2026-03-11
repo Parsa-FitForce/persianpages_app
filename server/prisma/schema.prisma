@@ -48,6 +48,7 @@ model Listing {
   longitude     Float?
   placeId       String?
   website       String?
+  yelpUrl       String?
   socialLinks   Json?
   businessHours Json?
   photos            String[]

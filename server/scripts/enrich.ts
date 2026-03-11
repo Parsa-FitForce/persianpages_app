@@ -164,6 +164,76 @@ async function scrapeWebsite(url: string): Promise<ScrapedSite | null> {
   }
 }
 
+/**
+ * Scrape a Yelp business page to extract the actual business website URL.
+ * Yelp puts the real website link in a redirect URL or an anchor on the biz page.
+ */
+async function scrapeYelpForWebsite(yelpUrl: string): Promise<string | null> {
+  try {
+    if (!yelpUrl.startsWith('http')) yelpUrl = `https://${yelpUrl}`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    const res = await fetch(yelpUrl, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      redirect: 'follow',
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) return null;
+
+    const html = await res.text();
+    const dom = new JSDOM(html, { url: yelpUrl });
+    const doc = dom.window.document;
+
+    // Yelp puts website links in href with /biz_redir?url= or in a link with text "Business website"
+    const links = doc.querySelectorAll('a[href]');
+    for (const link of links) {
+      const href = link.getAttribute('href') || '';
+
+      // Yelp redirect pattern: /biz_redir?url=...
+      if (href.includes('biz_redir') && href.includes('url=')) {
+        try {
+          const parsed = new URL(href, yelpUrl);
+          const realUrl = parsed.searchParams.get('url');
+          if (realUrl && !realUrl.includes('yelp.com')) return realUrl;
+        } catch {}
+      }
+
+      // Direct external link pattern
+      const text = (link.textContent || '').trim().toLowerCase();
+      if ((text.includes('website') || text.includes('business site')) && href.startsWith('http') && !href.includes('yelp.com')) {
+        return href;
+      }
+    }
+
+    // Also check for JSON-LD structured data
+    const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
+    for (const script of scripts) {
+      try {
+        const data = JSON.parse(script.textContent || '');
+        if (data.url && !data.url.includes('yelp.com')) return data.url;
+      } catch {}
+    }
+
+    return null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('abort')) {
+      console.error(`    Timeout scraping Yelp page: ${yelpUrl}`);
+    } else {
+      console.error(`    Yelp scrape failed for ${yelpUrl}: ${msg}`);
+    }
+    return null;
+  }
+}
+
 function toAbsoluteUrl(src: string, base: string): string | null {
   try {
     return new URL(src, base).href;
@@ -313,15 +383,18 @@ async function enrichListings(prisma: PrismaClient, options: EnrichOptions = {})
     console.log(`Cleaned ${yelpCleaned.count} Yelp URLs from listings`);
   }
 
-  // Find listings with real websites that can be enriched
+  // Find listings that can be enriched (have website OR yelpUrl to discover website from)
   const where: any = {
     isActive: true,
     source: 'scraped',
-    website: { not: null },
+    OR: [
+      { website: { not: null } },
+      { yelpUrl: { not: null } },
+    ],
   };
   if (city) where.city = city;
   if (id) {
-    delete where.website;
+    delete where.OR;
     delete where.source;
     where.id = id;
   }
@@ -342,10 +415,34 @@ async function enrichListings(prisma: PrismaClient, options: EnrichOptions = {})
   for (let i = 0; i < listings.length; i++) {
     const listing = listings[i];
     const num = `[${i + 1}/${listings.length}]`;
-    console.log(`${num} ${listing.title} — ${listing.website}`);
+    let website = listing.website;
+
+    // Step 0: If no website but has Yelp URL, scrape Yelp page to find the real website
+    if (!website && (listing as any).yelpUrl) {
+      console.log(`${num} ${listing.title} — discovering website from Yelp...`);
+      const discovered = await scrapeYelpForWebsite((listing as any).yelpUrl);
+      if (discovered) {
+        website = discovered;
+        console.log(`    Found website: ${discovered}`);
+        if (!dryRun) {
+          await prisma.listing.update({
+            where: { id: listing.id },
+            data: { website: discovered },
+          });
+        }
+        stats.websitesDiscovered++;
+      } else {
+        console.log(`    No website found on Yelp page`);
+        stats.details.push(`SKIP: ${listing.title} — no website on Yelp page`);
+        continue;
+      }
+      await new Promise(r => setTimeout(r, 500)); // Rate limit Yelp
+    }
+
+    console.log(`${num} ${listing.title} — ${website}`);
 
     // Step 1: Scrape the website
-    const siteData = await scrapeWebsite(listing.website!);
+    const siteData = await scrapeWebsite(website!);
     if (!siteData) {
       stats.failed++;
       stats.details.push(`SKIP: ${listing.title} — scrape failed`);

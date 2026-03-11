@@ -66,6 +66,7 @@ interface GooglePlace {
   formattedAddress?: string;
   internationalPhoneNumber?: string;
   websiteUri?: string;
+  yelpUrl?: string;
   location?: { latitude: number; longitude: number };
   regularOpeningHours?: {
     periods?: Array<{
@@ -394,6 +395,7 @@ function yelpToGooglePlace(biz: YelpBusiness): GooglePlace {
     formattedAddress: address,
     internationalPhoneNumber: biz.phone || undefined,
     websiteUri: undefined, // biz.url is the Yelp page, not the business's own website
+    yelpUrl: biz.url || undefined,
     location: biz.coordinates ? {
       latitude: biz.coordinates.latitude,
       longitude: biz.coordinates.longitude,
@@ -690,6 +692,7 @@ async function importListings(
         longitude: place.location?.longitude || null,
         placeId: place.id,
         website: place.websiteUri || null,
+        yelpUrl: place.yelpUrl || null,
         businessHours,
         photos,
         photoAttributions,
