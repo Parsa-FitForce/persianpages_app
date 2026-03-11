@@ -37,6 +37,9 @@ services:
       SES_REGION: us-east-1
       AWS_REGION: us-east-1
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-}
       GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:-}
       YELP_API_KEY: ${YELP_API_KEY:-}
       SUPPORT_SERVICE_URL: http://host.docker.internal:5005

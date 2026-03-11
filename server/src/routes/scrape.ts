@@ -14,7 +14,7 @@ const jobs: Map<string, { status: string; result?: ScrapeResult | EnrichStats; e
 // Starts scrape job asynchronously, returns job ID
 router.post('/', (req: Request, res: Response) => {
   const apiKey = req.headers['x-scrape-key'];
-  const expectedKey = process.env.ANTHROPIC_API_KEY;
+  const expectedKey = process.env.ADMIN_API_KEY;
 
   if (!apiKey || apiKey !== expectedKey) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -42,7 +42,7 @@ router.post('/', (req: Request, res: Response) => {
 // GET /api/scrape/:jobId — check job status
 router.get('/:jobId', (req: Request, res: Response) => {
   const apiKey = req.headers['x-scrape-key'];
-  const expectedKey = process.env.ANTHROPIC_API_KEY;
+  const expectedKey = process.env.ADMIN_API_KEY;
 
   if (!apiKey || apiKey !== expectedKey) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -59,7 +59,7 @@ router.get('/:jobId', (req: Request, res: Response) => {
 // POST /api/scrape/backfill-photos — add photos to listings that are missing them
 router.post('/backfill-photos', (req: Request, res: Response) => {
   const apiKey = req.headers['x-scrape-key'];
-  const expectedKey = process.env.ANTHROPIC_API_KEY;
+  const expectedKey = process.env.ADMIN_API_KEY;
   if (!apiKey || apiKey !== expectedKey) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -83,7 +83,7 @@ router.post('/backfill-photos', (req: Request, res: Response) => {
 // POST /api/scrape/enrich — enrich listings by scraping their websites
 router.post('/enrich', (req: Request, res: Response) => {
   const apiKey = req.headers['x-scrape-key'];
-  const expectedKey = process.env.ANTHROPIC_API_KEY;
+  const expectedKey = process.env.ADMIN_API_KEY;
   if (!apiKey || apiKey !== expectedKey) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -116,7 +116,7 @@ const countryHints: Record<string, string> = {
 
 router.post('/fix-phones', async (req: Request, res: Response) => {
   const apiKey = req.headers['x-scrape-key'];
-  const expectedKey = process.env.ANTHROPIC_API_KEY;
+  const expectedKey = process.env.ADMIN_API_KEY;
   if (!apiKey || apiKey !== expectedKey) {
     return res.status(401).json({ error: 'Unauthorized' });
   }

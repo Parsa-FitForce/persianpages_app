@@ -2,8 +2,8 @@
  * PersianPages Listing Enrichment
  *
  * Visits business websites to scrape content, downloads images, and uses
- * Claude Haiku to generate richer Persian descriptions. No paid APIs
- * besides Claude (~$0.01 per listing).
+ * an LLM (OpenAI by default, Anthropic fallback) to generate richer
+ * Persian descriptions. ~$0.01 per listing.
  *
  * Usage (from server/):
  *   npx tsx scripts/enrich.ts                     # enrich all eligible listings
@@ -18,6 +18,7 @@ import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
 import { resolve, join } from 'path';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { JSDOM } from 'jsdom';
+import { callLLM, validateLLMConfig } from './llm';
 
 // ── Load .env (for local CLI use only) ─────────────────────────────────
 
@@ -237,7 +238,7 @@ async function uploadPhoto(
   }
 }
 
-// ── Claude Enrichment ──────────────────────────────────────────────────
+// ── LLM Enrichment ────────────────────────────────────────────────────
 
 interface EnrichmentResult {
   description: string;
@@ -247,7 +248,6 @@ interface EnrichmentResult {
 async function generateDescription(
   listing: { title: string; description: string; city: string; country: string; categorySlug: string },
   siteData: ScrapedSite,
-  apiKey: string,
 ): Promise<EnrichmentResult | null> {
   const prompt = `You are writing content for PersianPages, a directory of Iranian/Persian businesses worldwide.
 Write in Persian (Farsi script).
@@ -266,33 +266,11 @@ Website content we scraped:
 Write an improved Persian description for this business (2-4 sentences). Use real details from the website — mention specific services, specialties, or unique offerings. Keep it natural and informative, not promotional. Only output the description text, nothing else.`;
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 500,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      console.error(`    Claude API error (${res.status}): ${text}`);
-      return null;
-    }
-
-    const data = await res.json();
-    const content = data.content?.[0]?.text?.trim();
+    const content = await callLLM(prompt, { maxTokens: 500 });
     if (!content) return null;
-
     return { description: content };
   } catch (err) {
-    console.error(`    Claude error: ${err}`);
+    console.error(`    LLM error: ${err}`);
     return null;
   }
 }
@@ -319,8 +297,7 @@ interface EnrichStats {
 
 async function enrichListings(prisma: PrismaClient, options: EnrichOptions = {}): Promise<EnrichStats> {
   const { limit = 50, city, dryRun = false, id } = options;
-  const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
-  if (!anthropicApiKey) throw new Error('Missing ANTHROPIC_API_KEY');
+  validateLLMConfig();
 
   const stats: EnrichStats = {
     total: 0, scraped: 0, descriptionsUpdated: 0, photosAdded: 0,
@@ -439,7 +416,7 @@ async function enrichListings(prisma: PrismaClient, options: EnrichOptions = {})
       }
     }
 
-    // Step 4: Generate better description with Claude
+    // Step 4: Generate better description with LLM
     if (siteData.bodyText.length > 100) {
       const result = await generateDescription(
         {
@@ -450,7 +427,6 @@ async function enrichListings(prisma: PrismaClient, options: EnrichOptions = {})
           categorySlug: listing.category.slug,
         },
         siteData,
-        anthropicApiKey,
       );
 
       if (result && result.description.length > listing.description.length) {

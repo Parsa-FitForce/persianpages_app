@@ -19,6 +19,7 @@ import { PrismaClient } from '@prisma/client';
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
 import { resolve, join } from 'path';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { callLLM, validateLLMConfig } from './llm';
 
 // ── Load .env (for local CLI use only) ─────────────────────────────────
 
@@ -485,9 +486,9 @@ async function dedup(places: GooglePlace[], prisma: PrismaClient): Promise<Googl
   return fresh;
 }
 
-// ── Claude Haiku Filtering ─────────────────────────────────────────────
+// ── LLM Classification ────────────────────────────────────────────────
 
-async function classifyBatch(places: GooglePlace[], apiKey: string): Promise<Map<string, ClaudeResult>> {
+async function classifyBatch(places: GooglePlace[]): Promise<Map<string, ClaudeResult>> {
   const results = new Map<string, ClaudeResult>();
 
   for (let i = 0; i < places.length; i += 8) {
@@ -518,32 +519,12 @@ Respond with ONLY a JSON array of objects, one per business, in the same order. 
 { "placeId": string, "isPersian": boolean, "confidence": number, "categorySlug": string, "title": string, "description": string, "reason": string }`;
 
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 4096,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        console.error(`  Claude API error (${res.status}): ${text}`);
-        continue;
-      }
-
-      const data = await res.json();
-      const content = data.content?.[0]?.text || '';
+      const content = await callLLM(prompt, { maxTokens: 4096 });
+      if (!content) continue;
 
       const jsonMatch = content.match(/\[[\s\S]*\]/);
       if (!jsonMatch) {
-        console.error('  Failed to parse Claude response as JSON array');
+        console.error('  Failed to parse LLM response as JSON array');
         continue;
       }
 
@@ -741,11 +722,10 @@ export async function runScrape(
 
   const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
   const yelpApiKey = process.env.YELP_API_KEY;
-  const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
 
   if (source === 'google' && !googleApiKey) throw new Error('Missing GOOGLE_PLACES_API_KEY');
   if (source === 'yelp' && !yelpApiKey) throw new Error('Missing YELP_API_KEY');
-  if (!anthropicApiKey) throw new Error('Missing ANTHROPIC_API_KEY');
+  validateLLMConfig();
 
   // Resolve city
   let cityConfig: CityConfig | null = null;
@@ -787,8 +767,9 @@ export async function runScrape(
   }
 
   // Step 3: Classify
-  console.log('\nStep 3: Classifying with Claude Haiku...');
-  const classifications = await classifyBatch(newPlaces, anthropicApiKey);
+  const provider = process.env.LLM_PROVIDER || 'openai';
+  console.log(`\nStep 3: Classifying with ${provider === 'openai' ? 'OpenAI' : 'Anthropic'}...`);
+  const classifications = await classifyBatch(newPlaces);
   console.log(`  Classified ${classifications.size} businesses\n`);
 
   let persianCount = 0;

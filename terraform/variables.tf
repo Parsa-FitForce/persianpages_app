@@ -102,7 +102,27 @@ variable "twilio_messaging_sid" {
 }
 
 variable "anthropic_api_key" {
-  description = "Anthropic API key for scraping pipeline"
+  description = "Anthropic API key (LLM fallback)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "openai_api_key" {
+  description = "OpenAI API key for LLM (primary)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "llm_provider" {
+  description = "LLM provider to use (openai or anthropic)"
+  type        = string
+  default     = "openai"
+}
+
+variable "admin_api_key" {
+  description = "Admin API key for scrape/enrich endpoints"
   type        = string
   sensitive   = true
   default     = ""

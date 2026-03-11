@@ -200,6 +200,18 @@ resource "aws_ecs_task_definition" "api" {
           valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:ANTHROPIC_API_KEY::"
         },
         {
+          name      = "OPENAI_API_KEY"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:OPENAI_API_KEY::"
+        },
+        {
+          name      = "LLM_PROVIDER"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:LLM_PROVIDER::"
+        },
+        {
+          name      = "ADMIN_API_KEY"
+          valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:ADMIN_API_KEY::"
+        },
+        {
           name      = "GOOGLE_PLACES_API_KEY"
           valueFrom = "${aws_secretsmanager_secret.app_secrets.arn}:GOOGLE_PLACES_API_KEY::"
         },
