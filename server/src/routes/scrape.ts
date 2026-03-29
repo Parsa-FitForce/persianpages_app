@@ -88,12 +88,12 @@ router.post('/enrich', (req: Request, res: Response) => {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { limit = 50, city, dryRun = false, id } = req.body;
+  const { limit = 50, city, dryRun = false, id, force = false } = req.body;
   const jobId = `enrich-${Date.now()}`;
 
   jobs.set(jobId, { status: 'running' });
 
-  enrichListings(prisma, { limit, city, dryRun, id })
+  enrichListings(prisma, { limit, city, dryRun, id, force })
     .then(result => {
       jobs.set(jobId, { status: 'completed', result });
       console.log(`Enrich job ${jobId} completed: ${result.descriptionsUpdated} descriptions, ${result.photosAdded} photos`);

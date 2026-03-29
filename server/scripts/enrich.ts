@@ -1,9 +1,13 @@
 /**
- * PersianPages Listing Enrichment
+ * PersianPages Listing Enrichment v2
  *
- * Visits business websites to scrape content, downloads images, and uses
- * an LLM (OpenAI by default, Anthropic fallback) to generate richer
- * Persian descriptions. ~$0.01 per listing.
+ * Comprehensive enrichment pipeline:
+ * 1. Google Places API — refresh name, website, phone, hours, photos
+ * 2. Website scraping — content, images, social links (Instagram, WhatsApp, etc.)
+ * 3. LLM — correct Farsi title spelling, generate rich Farsi description
+ * 4. Photo download — up to 5 photos from Google Places + website
+ *
+ * Works on ALL listings (not just ones with websites).
  *
  * Usage (from server/):
  *   npx tsx scripts/enrich.ts                     # enrich all eligible listings
@@ -11,6 +15,7 @@
  *   npx tsx scripts/enrich.ts --city "لندن"        # only listings in a city
  *   npx tsx scripts/enrich.ts --dry-run            # preview without writing
  *   npx tsx scripts/enrich.ts --id clu1abc123      # enrich a single listing
+ *   npx tsx scripts/enrich.ts --force              # re-enrich already-enriched listings
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -43,7 +48,26 @@ function loadEnvIfLocal() {
   }
 }
 
-// ── Website Scraping ───────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────
+
+interface GooglePlaceDetails {
+  id: string;
+  displayName?: { text: string; languageCode?: string };
+  formattedAddress?: string;
+  internationalPhoneNumber?: string;
+  websiteUri?: string;
+  location?: { latitude: number; longitude: number };
+  regularOpeningHours?: {
+    periods?: Array<{
+      open: { day: number; hour: number; minute: number };
+      close: { day: number; hour: number; minute: number };
+    }>;
+  };
+  photos?: Array<{
+    name: string;
+    authorAttributions?: Array<{ displayName?: string; uri?: string }>;
+  }>;
+}
 
 interface ScrapedSite {
   title: string | null;
@@ -54,209 +78,92 @@ interface ScrapedSite {
   ogImage: string | null;
 }
 
-const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+interface LLMEnrichResult {
+  titleFa: string;
+  description: string;
+}
 
-async function scrapeWebsite(url: string): Promise<ScrapedSite | null> {
+// ── Google Places API ────────────────────────────────────────────────
+
+const PLACES_DETAIL_FIELDS = [
+  'id', 'displayName', 'formattedAddress', 'internationalPhoneNumber',
+  'websiteUri', 'location', 'regularOpeningHours', 'photos',
+].join(',');
+
+async function fetchPlaceDetails(placeId: string, apiKey: string): Promise<GooglePlaceDetails | null> {
   try {
-    // Normalize URL
-    if (!url.startsWith('http')) url = `https://${url}`;
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-
-    const res = await fetch(url, {
+    const res = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
       headers: {
-        'User-Agent': USER_AGENT,
-        'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'en-US,en;q=0.9,fa;q=0.8',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': PLACES_DETAIL_FIELDS,
       },
-      redirect: 'follow',
-      signal: controller.signal,
     });
-    clearTimeout(timeout);
-
-    if (!res.ok) return null;
-
-    const contentType = res.headers.get('content-type') || '';
-    if (!contentType.includes('text/html')) return null;
-
-    const html = await res.text();
-    const dom = new JSDOM(html, { url });
-    const doc = dom.window.document;
-
-    // Extract meta info
-    const title = doc.querySelector('title')?.textContent?.trim() || null;
-    const metaDesc = doc.querySelector('meta[name="description"]')?.getAttribute('content')?.trim()
-      || doc.querySelector('meta[property="og:description"]')?.getAttribute('content')?.trim()
-      || null;
-    const ogImage = doc.querySelector('meta[property="og:image"]')?.getAttribute('content')?.trim() || null;
-
-    // Extract body text (stripped of scripts/styles)
-    const unwanted = doc.querySelectorAll('script, style, nav, footer, header, noscript, iframe');
-    unwanted.forEach(el => el.remove());
-    const bodyText = doc.body?.textContent?.replace(/\s+/g, ' ').trim().slice(0, 5000) || '';
-
-    // Extract images — prioritize large, content images
-    const imageUrls: string[] = [];
-    const seen = new Set<string>();
-
-    // OG image first
-    if (ogImage) {
-      const abs = toAbsoluteUrl(ogImage, url);
-      if (abs && !seen.has(abs)) { seen.add(abs); imageUrls.push(abs); }
+    if (!res.ok) {
+      console.error(`    Places API error (${res.status}) for ${placeId}`);
+      return null;
     }
-
-    // Content images
-    const imgs = doc.querySelectorAll('img[src]');
-    for (const img of imgs) {
-      if (imageUrls.length >= 6) break;
-      const src = img.getAttribute('src') || '';
-      const alt = img.getAttribute('alt') || '';
-      const width = parseInt(img.getAttribute('width') || '0', 10);
-      const height = parseInt(img.getAttribute('height') || '0', 10);
-
-      // Skip tiny images (icons, trackers, etc.)
-      if (width > 0 && width < 100) continue;
-      if (height > 0 && height < 100) continue;
-      if (src.includes('logo') || src.includes('icon') || src.includes('favicon')) continue;
-      if (src.includes('pixel') || src.includes('tracking') || src.includes('1x1')) continue;
-      if (src.startsWith('data:')) continue;
-
-      const abs = toAbsoluteUrl(src, url);
-      if (abs && !seen.has(abs) && isImageUrl(abs)) {
-        seen.add(abs);
-        imageUrls.push(abs);
-      }
-    }
-
-    // Extract social links
-    const socialLinks: Record<string, string> = {};
-    const links = doc.querySelectorAll('a[href]');
-    for (const link of links) {
-      const href = link.getAttribute('href') || '';
-      if (href.includes('instagram.com/')) {
-        const match = href.match(/instagram\.com\/([^/?#]+)/);
-        if (match && match[1] !== 'p' && match[1] !== 'reel') socialLinks.instagram = href;
-      } else if (href.includes('facebook.com/')) {
-        socialLinks.facebook = href;
-      } else if (href.includes('twitter.com/') || href.includes('x.com/')) {
-        socialLinks.twitter = href;
-      } else if (href.includes('tiktok.com/')) {
-        socialLinks.tiktok = href;
-      } else if (href.includes('linkedin.com/')) {
-        socialLinks.linkedin = href;
-      } else if (href.includes('youtube.com/') || href.includes('youtu.be/')) {
-        socialLinks.youtube = href;
-      } else if (href.includes('t.me/') || href.includes('telegram.me/')) {
-        socialLinks.telegram = href;
-      }
-    }
-
-    return { title, description: metaDesc, bodyText, imageUrls, socialLinks, ogImage };
+    return await res.json();
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!msg.includes('abort')) {
-      console.error(`    Scrape failed for ${url}: ${msg}`);
-    } else {
-      console.error(`    Timeout scraping ${url}`);
-    }
+    console.error(`    Places API failed for ${placeId}: ${err}`);
     return null;
   }
 }
 
-/**
- * Scrape a Yelp business page to extract the actual business website URL.
- * Yelp puts the real website link in a redirect URL or an anchor on the biz page.
- */
-async function scrapeYelpForWebsite(yelpUrl: string): Promise<string | null> {
+async function searchPlace(name: string, city: string, apiKey: string): Promise<GooglePlaceDetails | null> {
   try {
-    if (!yelpUrl.startsWith('http')) yelpUrl = `https://${yelpUrl}`;
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-
-    const res = await fetch(yelpUrl, {
+    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
       headers: {
-        'User-Agent': USER_AGENT,
-        'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'en-US,en;q=0.9',
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': `places.${PLACES_DETAIL_FIELDS.split(',').join(',places.')}`,
       },
-      redirect: 'follow',
-      signal: controller.signal,
+      body: JSON.stringify({ textQuery: `${name} ${city}` }),
     });
-    clearTimeout(timeout);
-
     if (!res.ok) return null;
-
-    const html = await res.text();
-    const dom = new JSDOM(html, { url: yelpUrl });
-    const doc = dom.window.document;
-
-    // Yelp puts website links in href with /biz_redir?url= or in a link with text "Business website"
-    const links = doc.querySelectorAll('a[href]');
-    for (const link of links) {
-      const href = link.getAttribute('href') || '';
-
-      // Yelp redirect pattern: /biz_redir?url=...
-      if (href.includes('biz_redir') && href.includes('url=')) {
-        try {
-          const parsed = new URL(href, yelpUrl);
-          const realUrl = parsed.searchParams.get('url');
-          if (realUrl && !realUrl.includes('yelp.com')) return realUrl;
-        } catch {}
-      }
-
-      // Direct external link pattern
-      const text = (link.textContent || '').trim().toLowerCase();
-      if ((text.includes('website') || text.includes('business site')) && href.startsWith('http') && !href.includes('yelp.com')) {
-        return href;
-      }
-    }
-
-    // Also check for JSON-LD structured data
-    const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
-    for (const script of scripts) {
-      try {
-        const data = JSON.parse(script.textContent || '');
-        if (data.url && !data.url.includes('yelp.com')) return data.url;
-      } catch {}
-    }
-
-    return null;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes('abort')) {
-      console.error(`    Timeout scraping Yelp page: ${yelpUrl}`);
-    } else {
-      console.error(`    Yelp scrape failed for ${yelpUrl}: ${msg}`);
-    }
-    return null;
-  }
-}
-
-function toAbsoluteUrl(src: string, base: string): string | null {
-  try {
-    return new URL(src, base).href;
+    const data = await res.json();
+    return data.places?.[0] || null;
   } catch {
     return null;
   }
 }
 
-function isImageUrl(url: string): boolean {
-  const lower = url.toLowerCase();
-  return /\.(jpg|jpeg|png|webp|avif)(\?|$)/.test(lower)
-    || lower.includes('/image')
-    || lower.includes('/photo')
-    || lower.includes('/upload');
+// ── Photo Download & Upload ────────────────────────────────────────────
+
+async function downloadGooglePhoto(
+  photoRef: { name: string; authorAttributions?: Array<{ displayName?: string }> },
+  apiKey: string,
+): Promise<{ buffer: Buffer; contentType: string; attribution: string } | null> {
+  try {
+    const isDirectUrl = photoRef.name.startsWith('http');
+    const mediaUrl = isDirectUrl
+      ? photoRef.name
+      : `https://places.googleapis.com/v1/${photoRef.name}/media?maxHeightPx=800&key=${apiKey}`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const res = await fetch(mediaUrl, { signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (!res.ok) return null;
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.length < 5000) return null; // skip tiny
+    if (buffer.length > 10 * 1024 * 1024) return null; // skip huge
+
+    const attribution = isDirectUrl
+      ? 'Website'
+      : (photoRef.authorAttributions?.[0]?.displayName || 'Google');
+
+    return { buffer, contentType: 'image/jpeg', attribution };
+  } catch {
+    return null;
+  }
 }
 
-// ── Image Download & Upload ────────────────────────────────────────────
-
-async function downloadImage(url: string): Promise<{ buffer: Buffer; contentType: string } | null> {
+async function downloadWebImage(url: string): Promise<{ buffer: Buffer; contentType: string } | null> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
-
     const res = await fetch(url, {
       headers: { 'User-Agent': USER_AGENT },
       redirect: 'follow',
@@ -265,28 +172,18 @@ async function downloadImage(url: string): Promise<{ buffer: Buffer; contentType
     clearTimeout(timeout);
 
     if (!res.ok) return null;
-
     const contentType = res.headers.get('content-type') || 'image/jpeg';
     if (!contentType.startsWith('image/')) return null;
 
     const buffer = Buffer.from(await res.arrayBuffer());
-
-    // Skip tiny images (< 5KB probably icons/trackers)
-    if (buffer.length < 5000) return null;
-    // Skip huge images (> 10MB)
-    if (buffer.length > 10 * 1024 * 1024) return null;
-
+    if (buffer.length < 5000 || buffer.length > 10 * 1024 * 1024) return null;
     return { buffer, contentType };
   } catch {
     return null;
   }
 }
 
-async function uploadPhoto(
-  buffer: Buffer,
-  contentType: string,
-  key: string,
-): Promise<string> {
+async function uploadPhoto(buffer: Buffer, contentType: string, key: string): Promise<string> {
   const S3_BUCKET = process.env.S3_UPLOADS_BUCKET;
   const S3_REGION = process.env.S3_UPLOADS_REGION || 'us-east-1';
 
@@ -308,93 +205,247 @@ async function uploadPhoto(
   }
 }
 
-// ── LLM Enrichment ────────────────────────────────────────────────────
+// ── Website Scraping ───────────────────────────────────────────────────
 
-interface EnrichmentResult {
-  description: string;
-  shortDescription?: string;
+const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+async function scrapeWebsite(url: string): Promise<ScrapedSite | null> {
+  try {
+    if (!url.startsWith('http')) url = `https://${url}`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9,fa;q=0.8',
+      },
+      redirect: 'follow',
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) return null;
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('text/html')) return null;
+
+    const html = await res.text();
+    const dom = new JSDOM(html, { url });
+    const doc = dom.window.document;
+
+    // Meta info
+    const title = doc.querySelector('title')?.textContent?.trim() || null;
+    const metaDesc = doc.querySelector('meta[name="description"]')?.getAttribute('content')?.trim()
+      || doc.querySelector('meta[property="og:description"]')?.getAttribute('content')?.trim()
+      || null;
+    const ogImage = doc.querySelector('meta[property="og:image"]')?.getAttribute('content')?.trim() || null;
+
+    // Body text
+    const unwanted = doc.querySelectorAll('script, style, nav, footer, header, noscript, iframe');
+    unwanted.forEach(el => el.remove());
+    const bodyText = doc.body?.textContent?.replace(/\s+/g, ' ').trim().slice(0, 5000) || '';
+
+    // Images
+    const imageUrls: string[] = [];
+    const seen = new Set<string>();
+
+    if (ogImage) {
+      const abs = toAbsoluteUrl(ogImage, url);
+      if (abs && !seen.has(abs)) { seen.add(abs); imageUrls.push(abs); }
+    }
+
+    const imgs = doc.querySelectorAll('img[src]');
+    for (const img of imgs) {
+      if (imageUrls.length >= 8) break;
+      const src = img.getAttribute('src') || '';
+      const width = parseInt(img.getAttribute('width') || '0', 10);
+      const height = parseInt(img.getAttribute('height') || '0', 10);
+
+      if (width > 0 && width < 100) continue;
+      if (height > 0 && height < 100) continue;
+      if (src.includes('logo') || src.includes('icon') || src.includes('favicon')) continue;
+      if (src.includes('pixel') || src.includes('tracking') || src.includes('1x1')) continue;
+      if (src.startsWith('data:')) continue;
+
+      const abs = toAbsoluteUrl(src, url);
+      if (abs && !seen.has(abs) && isImageUrl(abs)) {
+        seen.add(abs);
+        imageUrls.push(abs);
+      }
+    }
+
+    // Social links (expanded to include WhatsApp)
+    const socialLinks: Record<string, string> = {};
+    const links = doc.querySelectorAll('a[href]');
+    for (const link of links) {
+      const href = link.getAttribute('href') || '';
+      if (href.includes('instagram.com/')) {
+        const match = href.match(/instagram\.com\/([^/?#]+)/);
+        if (match && match[1] !== 'p' && match[1] !== 'reel' && match[1] !== 'explore') {
+          socialLinks.instagram = href.split('?')[0];
+        }
+      } else if (href.includes('facebook.com/')) {
+        socialLinks.facebook = href.split('?')[0];
+      } else if (href.includes('twitter.com/') || href.includes('x.com/')) {
+        socialLinks.twitter = href.split('?')[0];
+      } else if (href.includes('tiktok.com/')) {
+        socialLinks.tiktok = href.split('?')[0];
+      } else if (href.includes('linkedin.com/')) {
+        socialLinks.linkedin = href.split('?')[0];
+      } else if (href.includes('youtube.com/') || href.includes('youtu.be/')) {
+        socialLinks.youtube = href.split('?')[0];
+      } else if (href.includes('t.me/') || href.includes('telegram.me/')) {
+        socialLinks.telegram = href.split('?')[0];
+      } else if (href.includes('wa.me/') || href.includes('whatsapp.com') || href.includes('api.whatsapp.com')) {
+        socialLinks.whatsapp = href;
+      } else if (href.includes('yelp.com/biz/')) {
+        socialLinks.yelp = href.split('?')[0];
+      }
+    }
+
+    // Also check for WhatsApp in onclick or tel: links with WhatsApp indicators
+    const allElements = doc.querySelectorAll('[onclick*="whatsapp"], [href*="whatsapp"]');
+    for (const el of allElements) {
+      const onclick = el.getAttribute('onclick') || '';
+      const href = el.getAttribute('href') || '';
+      const waMatch = (onclick + href).match(/wa\.me\/(\+?\d+)/);
+      if (waMatch && !socialLinks.whatsapp) {
+        socialLinks.whatsapp = `https://wa.me/${waMatch[1]}`;
+      }
+    }
+
+    return { title, description: metaDesc, bodyText, imageUrls, socialLinks, ogImage };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes('abort')) {
+      console.error(`    Scrape failed for ${url}: ${msg}`);
+    } else {
+      console.error(`    Timeout scraping ${url}`);
+    }
+    return null;
+  }
 }
 
-async function generateDescription(
-  listing: { title: string; description: string; city: string; country: string; categorySlug: string },
-  siteData: ScrapedSite,
-): Promise<EnrichmentResult | null> {
-  const prompt = `You are writing content for PersianPages, a directory of Iranian/Persian businesses worldwide.
-Write in Persian (Farsi script).
+function toAbsoluteUrl(src: string, base: string): string | null {
+  try { return new URL(src, base).href; } catch { return null; }
+}
 
-Current listing:
-- Title: ${listing.title}
+function isImageUrl(url: string): boolean {
+  const lower = url.toLowerCase();
+  return /\.(jpg|jpeg|png|webp|avif)(\?|$)/.test(lower)
+    || lower.includes('/image')
+    || lower.includes('/photo')
+    || lower.includes('/upload');
+}
+
+// ── LLM Enrichment ────────────────────────────────────────────────────
+
+async function llmEnrich(
+  listing: { title: string; description: string; city: string; country: string; categorySlug: string },
+  englishName: string | null,
+  siteData: ScrapedSite | null,
+): Promise<LLMEnrichResult | null> {
+  const websiteInfo = siteData
+    ? `
+Website info:
+- Site title: ${siteData.title || 'N/A'}
+- Meta description: ${siteData.description || 'N/A'}
+- Page content (excerpt): ${siteData.bodyText.slice(0, 3000)}`
+    : 'No website data available.';
+
+  const prompt = `You are a native Persian (Farsi) editor for PersianPages, a directory of Iranian/Persian businesses worldwide.
+
+Your job: Fix the Farsi name and write a proper Farsi description for this business.
+
+BUSINESS INFO:
+- Current Farsi title: ${listing.title}
+- English name (from Google): ${englishName || 'N/A'}
 - City: ${listing.city}, ${listing.country}
 - Category: ${listing.categorySlug}
 - Current description: ${listing.description}
+${websiteInfo}
 
-Website content we scraped:
-- Site title: ${siteData.title || 'N/A'}
-- Meta description: ${siteData.description || 'N/A'}
-- Page text (excerpt): ${siteData.bodyText.slice(0, 3000)}
+INSTRUCTIONS:
 
-Write an improved Persian description for this business (2-4 sentences). Use real details from the website — mention specific services, specialties, or unique offerings. Keep it natural and informative, not promotional. Only output the description text, nothing else.`;
+1. **titleFa**: Fix the Farsi spelling/transliteration of the business name.
+   - Use the English name from Google as reference for correct spelling
+   - Keep the name in Farsi script — transliterate properly
+   - If the business has a well-known Persian name, use that
+   - If the name is a proper noun (person's name, brand), transliterate accurately
+   - Don't add extra words — just the business name, clean and correct
+   - If the current Farsi title is already correct, keep it as-is
+
+2. **description**: Write a rich, natural Farsi description (3-5 sentences).
+   - Use details from the website content — mention specific services, specialties, menu items, areas of expertise
+   - Write naturally as a knowledgeable local would describe the business to a friend
+   - Include practical details: what they're known for, what makes them special
+   - Don't be promotional or use superlatives — be informative
+   - Don't start with the business name — jump straight into what they do
+   - Must be in fluent, natural Farsi — not awkward machine-translated text
+
+RESPOND ONLY with valid JSON (no markdown, no backticks):
+{"titleFa": "...", "description": "..."}`;
 
   try {
-    const content = await callLLM(prompt, { maxTokens: 500 });
+    const content = await callLLM(prompt, { maxTokens: 800 });
     if (!content) return null;
-    return { description: content };
+
+    // Parse JSON — handle possible markdown wrapping
+    const cleaned = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+
+    if (!parsed.titleFa || !parsed.description) return null;
+    return parsed;
   } catch (err) {
-    console.error(`    LLM error: ${err}`);
+    console.error(`    LLM parse error: ${err}`);
     return null;
   }
 }
 
 // ── Main Enrichment ────────────────────────────────────────────────────
 
-interface EnrichOptions {
+export interface EnrichOptions {
   limit?: number;
   city?: string;
   dryRun?: boolean;
   id?: string;
+  force?: boolean;
 }
 
-interface EnrichStats {
+export interface EnrichStats {
   total: number;
   scraped: number;
   descriptionsUpdated: number;
+  titlesFixed: number;
   photosAdded: number;
   socialLinksAdded: number;
   websitesDiscovered: number;
+  phonesUpdated: number;
+  hoursUpdated: number;
   failed: number;
   details: string[];
 }
 
 async function enrichListings(prisma: PrismaClient, options: EnrichOptions = {}): Promise<EnrichStats> {
-  const { limit = 50, city, dryRun = false, id } = options;
+  const { limit = 50, city, dryRun = false, id, force = false } = options;
   validateLLMConfig();
 
+  const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
+
   const stats: EnrichStats = {
-    total: 0, scraped: 0, descriptionsUpdated: 0, photosAdded: 0,
-    socialLinksAdded: 0, websitesDiscovered: 0, failed: 0, details: [],
+    total: 0, scraped: 0, descriptionsUpdated: 0, titlesFixed: 0,
+    photosAdded: 0, socialLinksAdded: 0, websitesDiscovered: 0,
+    phonesUpdated: 0, hoursUpdated: 0, failed: 0, details: [],
   };
 
-  // First: clean up Yelp page URLs (they're not real business websites)
-  const yelpCleaned = await prisma.listing.updateMany({
-    where: { website: { contains: 'yelp.com' } },
-    data: { website: null },
-  });
-  if (yelpCleaned.count > 0) {
-    console.log(`Cleaned ${yelpCleaned.count} Yelp URLs from listings`);
-  }
-
-  // Find listings that can be enriched (have website OR yelpUrl to discover website from)
+  // Build query — all active scraped listings
   const where: any = {
     isActive: true,
     source: 'scraped',
-    OR: [
-      { website: { not: null } },
-      { yelpUrl: { not: null } },
-    ],
   };
   if (city) where.city = city;
   if (id) {
-    delete where.OR;
     delete where.source;
     where.id = id;
   }
@@ -403,94 +454,175 @@ async function enrichListings(prisma: PrismaClient, options: EnrichOptions = {})
     where,
     include: { category: { select: { slug: true } } },
     orderBy: [
-      // Prioritize: no photos first, then short descriptions
       { createdAt: 'desc' },
     ],
     take: limit,
   });
 
   stats.total = listings.length;
-  console.log(`\nFound ${listings.length} listings to enrich${city ? ` in ${city}` : ''}${dryRun ? ' (DRY RUN)' : ''}\n`);
+  console.log(`\nFound ${listings.length} listings to enrich${city ? ` in ${city}` : ''}${dryRun ? ' (DRY RUN)' : ''}${force ? ' (FORCE)' : ''}\n`);
 
   for (let i = 0; i < listings.length; i++) {
     const listing = listings[i];
     const num = `[${i + 1}/${listings.length}]`;
-    let website = listing.website;
-
-    // Step 0: If no website but has Yelp URL, scrape Yelp page to find the real website
-    if (!website && (listing as any).yelpUrl) {
-      console.log(`${num} ${listing.title} — discovering website from Yelp...`);
-      const discovered = await scrapeYelpForWebsite((listing as any).yelpUrl);
-      if (discovered) {
-        website = discovered;
-        console.log(`    Found website: ${discovered}`);
-        if (!dryRun) {
-          await prisma.listing.update({
-            where: { id: listing.id },
-            data: { website: discovered },
-          });
-        }
-        stats.websitesDiscovered++;
-      } else {
-        console.log(`    No website found on Yelp page`);
-        stats.details.push(`SKIP: ${listing.title} — no website on Yelp page`);
-        continue;
-      }
-      await new Promise(r => setTimeout(r, 500)); // Rate limit Yelp
-    }
-
-    console.log(`${num} ${listing.title} — ${website}`);
-
-    // Step 1: Scrape the website
-    const siteData = await scrapeWebsite(website!);
-    if (!siteData) {
-      stats.failed++;
-      stats.details.push(`SKIP: ${listing.title} — scrape failed`);
-      continue;
-    }
-    stats.scraped++;
+    console.log(`${num} ${listing.title}`);
 
     const updates: any = {};
     const updateDetails: string[] = [];
 
-    // Step 2: Download and upload new photos (up to 5 total)
+    // ── Step 1: Google Places refresh ──
+    let placeData: GooglePlaceDetails | null = null;
+    let englishName: string | null = null;
+
+    if (googleApiKey) {
+      if (listing.placeId) {
+        placeData = await fetchPlaceDetails(listing.placeId, googleApiKey);
+      } else {
+        // Search by title + city to find the place
+        console.log(`    Searching Google Places...`);
+        placeData = await searchPlace(listing.title, listing.city, googleApiKey);
+        if (placeData?.id) {
+          updates.placeId = placeData.id;
+          updateDetails.push(`+placeId`);
+        }
+      }
+
+      if (placeData) {
+        englishName = placeData.displayName?.text || null;
+        console.log(`    Google: "${englishName}"`);
+
+        // Update website if missing or was a Yelp URL
+        if (!listing.website || listing.website.includes('yelp.com')) {
+          if (placeData.websiteUri) {
+            updates.website = placeData.websiteUri;
+            stats.websitesDiscovered++;
+            updateDetails.push(`+website`);
+          }
+        }
+
+        // Update phone if missing
+        if (!listing.phone && placeData.internationalPhoneNumber) {
+          const phone = placeData.internationalPhoneNumber.replace(/[\s\-\(\)]/g, '');
+          updates.phone = phone;
+          stats.phonesUpdated++;
+          updateDetails.push(`+phone`);
+        }
+
+        // Update business hours if missing
+        if (!listing.businessHours && placeData.regularOpeningHours?.periods) {
+          updates.businessHours = placeData.regularOpeningHours.periods;
+          stats.hoursUpdated++;
+          updateDetails.push(`+hours`);
+        }
+
+        // Update coordinates if missing
+        if (!listing.latitude && placeData.location) {
+          updates.latitude = placeData.location.latitude;
+          updates.longitude = placeData.location.longitude;
+          updateDetails.push(`+coords`);
+        }
+      }
+
+      await new Promise(r => setTimeout(r, 100)); // rate limit
+    }
+
+    // ── Step 2: Scrape website ──
+    const websiteUrl = updates.website || listing.website;
+    let siteData: ScrapedSite | null = null;
+
+    if (websiteUrl && !websiteUrl.includes('yelp.com')) {
+      siteData = await scrapeWebsite(websiteUrl);
+      if (siteData) {
+        stats.scraped++;
+
+        // Social links
+        if (Object.keys(siteData.socialLinks).length > 0) {
+          const existing = (listing.socialLinks as Record<string, string>) || {};
+          const merged = { ...existing, ...siteData.socialLinks };
+          if (Object.keys(merged).length > Object.keys(existing).length) {
+            updates.socialLinks = merged;
+            stats.socialLinksAdded++;
+            updateDetails.push(`+social: ${Object.keys(siteData.socialLinks).join(', ')}`);
+          }
+        }
+      }
+    }
+
+    // ── Step 3: Download photos (up to 5 total) ──
     const currentPhotos = listing.photos || [];
     const currentAttributions = (listing.photoAttributions as Record<string, string>) || {};
     const newPhotos = [...currentPhotos];
     const newAttributions = { ...currentAttributions };
     const maxPhotos = 5;
 
-    if (newPhotos.length < maxPhotos && siteData.imageUrls.length > 0) {
-      const candidates = siteData.imageUrls.slice(0, maxPhotos - newPhotos.length + 2); // grab extras in case some fail
+    if (newPhotos.length < maxPhotos) {
       let added = 0;
 
-      for (const imgUrl of candidates) {
-        if (newPhotos.length >= maxPhotos) break;
+      // Google Places photos first (higher quality)
+      if (googleApiKey && placeData?.photos) {
+        // Skip first photo if we already have a Google photo (it's usually the same)
+        const startIdx = currentPhotos.some(p => p.includes('/scraped/')) ? 1 : 0;
+        const candidates = placeData.photos.slice(startIdx, startIdx + (maxPhotos - newPhotos.length) + 2);
 
-        const img = await downloadImage(imgUrl);
-        if (!img) continue;
+        for (const photoRef of candidates) {
+          if (newPhotos.length >= maxPhotos) break;
 
-        const ext = img.contentType.includes('png') ? 'png'
-          : img.contentType.includes('webp') ? 'webp' : 'jpg';
-        const key = `uploads/enriched/${listing.id}-${newPhotos.length}.${ext}`;
+          const img = await downloadGooglePhoto(photoRef, googleApiKey);
+          if (!img) continue;
 
-        if (dryRun) {
-          console.log(`    Would download: ${imgUrl.slice(0, 80)}...`);
-          added++;
-          continue;
+          const key = `uploads/enriched/${listing.id}-g${newPhotos.length}.jpg`;
+          if (dryRun) {
+            console.log(`    Would download Google photo`);
+            added++;
+            continue;
+          }
+
+          try {
+            const uploadedUrl = await uploadPhoto(img.buffer, img.contentType, key);
+            newPhotos.push(uploadedUrl);
+            newAttributions[uploadedUrl] = img.attribution;
+            added++;
+            console.log(`    + Google photo (${img.attribution})`);
+          } catch (err) {
+            console.error(`    Photo upload failed: ${err}`);
+          }
+
+          await new Promise(r => setTimeout(r, 100));
         }
+      }
 
-        try {
-          const uploadedUrl = await uploadPhoto(img.buffer, img.contentType, key);
-          newPhotos.push(uploadedUrl);
-          newAttributions[uploadedUrl] = listing.website || 'Website';
-          added++;
-          console.log(`    + Photo: ${imgUrl.slice(0, 60)}...`);
-        } catch (err) {
-          console.error(`    Photo upload failed: ${err}`);
+      // Website photos to fill remaining slots
+      if (siteData && newPhotos.length < maxPhotos) {
+        for (const imgUrl of siteData.imageUrls) {
+          if (newPhotos.length >= maxPhotos) break;
+          // Skip if we already have this URL or similar
+          if (newPhotos.some(p => p === imgUrl)) continue;
+
+          const img = await downloadWebImage(imgUrl);
+          if (!img) continue;
+
+          const ext = img.contentType.includes('png') ? 'png'
+            : img.contentType.includes('webp') ? 'webp' : 'jpg';
+          const key = `uploads/enriched/${listing.id}-w${newPhotos.length}.${ext}`;
+
+          if (dryRun) {
+            console.log(`    Would download: ${imgUrl.slice(0, 80)}...`);
+            added++;
+            continue;
+          }
+
+          try {
+            const uploadedUrl = await uploadPhoto(img.buffer, img.contentType, key);
+            newPhotos.push(uploadedUrl);
+            newAttributions[uploadedUrl] = websiteUrl || 'Website';
+            added++;
+            console.log(`    + Web photo: ${imgUrl.slice(0, 60)}...`);
+          } catch (err) {
+            console.error(`    Photo upload failed: ${err}`);
+          }
+
+          await new Promise(r => setTimeout(r, 100));
         }
-
-        await new Promise(r => setTimeout(r, 200));
       }
 
       if (added > 0) {
@@ -501,53 +633,53 @@ async function enrichListings(prisma: PrismaClient, options: EnrichOptions = {})
       }
     }
 
-    // Step 3: Add social links
-    if (Object.keys(siteData.socialLinks).length > 0) {
-      const existing = (listing.socialLinks as Record<string, string>) || {};
-      const merged = { ...existing, ...siteData.socialLinks };
-      const newCount = Object.keys(siteData.socialLinks).length - Object.keys(existing).length;
-      if (Object.keys(merged).length > Object.keys(existing).length) {
-        updates.socialLinks = merged;
-        stats.socialLinksAdded++;
-        updateDetails.push(`+social: ${Object.keys(siteData.socialLinks).join(', ')}`);
+    // ── Step 4: LLM — fix title + generate description ──
+    const result = await llmEnrich(
+      {
+        title: listing.title,
+        description: listing.description,
+        city: listing.city,
+        country: listing.country,
+        categorySlug: listing.category.slug,
+      },
+      englishName,
+      siteData,
+    );
+
+    if (result) {
+      // Update title if LLM changed it
+      if (result.titleFa && result.titleFa !== listing.title) {
+        updates.title = result.titleFa;
+        stats.titlesFixed++;
+        updateDetails.push(`title: "${listing.title}" → "${result.titleFa}"`);
       }
-    }
 
-    // Step 4: Generate better description with LLM
-    if (siteData.bodyText.length > 100) {
-      const result = await generateDescription(
-        {
-          title: listing.title,
-          description: listing.description,
-          city: listing.city,
-          country: listing.country,
-          categorySlug: listing.category.slug,
-        },
-        siteData,
-      );
-
-      if (result && result.description.length > listing.description.length) {
+      // Update description if it's meaningfully different and longer
+      if (result.description && result.description.length > 50) {
         updates.description = result.description;
         stats.descriptionsUpdated++;
-        updateDetails.push('updated description');
-        console.log(`    ✓ New description (${listing.description.length} → ${result.description.length} chars)`);
+        updateDetails.push(`description (${listing.description.length} → ${result.description.length} chars)`);
       }
     }
 
-    // Step 5: Apply updates
+    // ── Step 5: Apply updates ──
     if (Object.keys(updates).length > 0 && !dryRun) {
       await prisma.listing.update({
         where: { id: listing.id },
         data: updates,
       });
       stats.details.push(`OK: ${listing.title} — ${updateDetails.join(', ')}`);
+      console.log(`    ✓ Updated: ${updateDetails.join(', ')}`);
     } else if (Object.keys(updates).length > 0) {
       stats.details.push(`DRY: ${listing.title} — would update: ${updateDetails.join(', ')}`);
+      console.log(`    [DRY] Would update: ${updateDetails.join(', ')}`);
     } else {
       stats.details.push(`NOOP: ${listing.title} — no improvements found`);
+      console.log(`    — no improvements`);
+      stats.failed++;
     }
 
-    // Rate limit
+    // Rate limit between listings
     await new Promise(r => setTimeout(r, 300));
   }
 
@@ -564,6 +696,7 @@ if (require.main === module) {
   let city: string | undefined;
   let dryRun = false;
   let id: string | undefined;
+  let force = false;
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -571,17 +704,22 @@ if (require.main === module) {
       case '--city': city = args[++i]; break;
       case '--dry-run': dryRun = true; break;
       case '--id': id = args[++i]; break;
+      case '--force': force = true; break;
     }
   }
 
   const prisma = new PrismaClient();
-  enrichListings(prisma, { limit, city, dryRun, id })
+  enrichListings(prisma, { limit, city, dryRun, id, force })
     .then(stats => {
       console.log('\n=== Enrichment Summary ===');
       console.log(`  Total: ${stats.total}, Scraped: ${stats.scraped}, Failed: ${stats.failed}`);
+      console.log(`  Titles fixed: ${stats.titlesFixed}`);
       console.log(`  Descriptions updated: ${stats.descriptionsUpdated}`);
       console.log(`  Photos added: ${stats.photosAdded}`);
       console.log(`  Social links found: ${stats.socialLinksAdded}`);
+      console.log(`  Websites discovered: ${stats.websitesDiscovered}`);
+      console.log(`  Phones updated: ${stats.phonesUpdated}`);
+      console.log(`  Hours updated: ${stats.hoursUpdated}`);
       console.log('');
       prisma.$disconnect();
     })
@@ -592,4 +730,4 @@ if (require.main === module) {
     });
 }
 
-export { enrichListings, EnrichOptions, EnrichStats };
+export { enrichListings, EnrichStats };

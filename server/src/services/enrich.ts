@@ -6,15 +6,19 @@ export interface EnrichOptions {
   city?: string;
   dryRun?: boolean;
   id?: string;
+  force?: boolean;
 }
 
 export interface EnrichStats {
   total: number;
   scraped: number;
   descriptionsUpdated: number;
+  titlesFixed: number;
   photosAdded: number;
   socialLinksAdded: number;
   websitesDiscovered: number;
+  phonesUpdated: number;
+  hoursUpdated: number;
   failed: number;
   details: string[];
 }
