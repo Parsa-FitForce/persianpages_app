@@ -19,6 +19,7 @@ export interface EnrichStats {
   websitesDiscovered: number;
   phonesUpdated: number;
   hoursUpdated: number;
+  deactivated: number;
   failed: number;
   details: string[];
 }

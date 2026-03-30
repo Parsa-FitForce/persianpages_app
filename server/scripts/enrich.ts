@@ -83,6 +83,36 @@ interface LLMEnrichResult {
   description: string;
 }
 
+// ── Country Mismatch Detection ───────────────────────────────────────
+
+const COUNTRY_KEYWORDS: Record<string, string[]> = {
+  'آمریکا': ['united states', 'usa', ', us', ', ca ', ', ny ', ', tx ', ', fl ', ', wa ', ', il '],
+  'کانادا': ['canada'],
+  'انگلستان': ['united kingdom', ', uk', 'england', 'scotland', 'wales'],
+  'آلمان': ['germany', 'deutschland'],
+  'فرانسه': ['france'],
+  'استرالیا': ['australia'],
+  'سوئد': ['sweden'],
+  'هلند': ['netherlands', 'holland'],
+  'ترکیه': ['turkey', 'türkiye'],
+  'امارات': ['united arab emirates', 'uae', 'dubai', 'abu dhabi', 'sharjah'],
+  'اتریش': ['austria'],
+  'دانمارک': ['denmark'],
+  'نروژ': ['norway'],
+  'بلژیک': ['belgium'],
+  'ایتالیا': ['italy', 'italia'],
+  'اسپانیا': ['spain', 'españa'],
+  'سوئیس': ['switzerland', 'schweiz', 'suisse'],
+  'نیوزیلند': ['new zealand'],
+};
+
+function detectCountryMismatch(listingCountry: string, googleAddress: string): boolean {
+  const keywords = COUNTRY_KEYWORDS[listingCountry];
+  if (!keywords) return false; // unknown country, can't validate
+  const addr = googleAddress.toLowerCase();
+  return !keywords.some(kw => addr.includes(kw));
+}
+
 // ── Google Places API ────────────────────────────────────────────────
 
 const PLACES_DETAIL_FIELDS = [
@@ -368,13 +398,17 @@ ${websiteInfo}
 
 INSTRUCTIONS:
 
-1. **titleFa**: Fix the Farsi spelling/transliteration of the business name.
-   - Use the English name from Google as reference for correct spelling
-   - Keep the name in Farsi script — transliterate properly
-   - If the business has a well-known Persian name, use that
-   - If the name is a proper noun (person's name, brand), transliterate accurately
-   - Don't add extra words — just the business name, clean and correct
-   - If the current Farsi title is already correct, keep it as-is
+1. **titleFa**: Fix the Farsi spelling/transliteration of the business name. BE AGGRESSIVE — most titles need fixing.
+   - Use the English name from Google as the PRIMARY reference for correct transliteration
+   - Sound out the English name and transliterate it properly into Farsi script
+   - Common mistakes to fix: wrong initial letter (e.g. ع instead of آ for "A"), missing vowels, wrong consonants
+   - Example: "Alounak" → "آلونک" (NOT "علونک"), "Hafez" → "حافظ" (NOT "هفز")
+   - Replace Arabic words with their Farsi equivalents: مخبز→نانوایی, حلويات→شیرینی‌فروشی, مطعم→رستوران, صالون→سالن
+   - For brand names, transliterate the English name phonetically — don't guess a Farsi meaning
+   - For person names (doctors, lawyers), use standard Farsi spelling: دکتر before name, proper name order
+   - Remove redundant words: "کباب کباب غذای ایرانی" → "کباب ایرانی"
+   - Don't add extra words like city name or category — just the business name, clean and correct
+   - If you're unsure, transliterate the English name fresh rather than keeping a bad existing title
 
 2. **description**: Write a rich, natural Farsi description (3-5 sentences).
    - Use details from the website content — mention specific services, specialties, menu items, areas of expertise
@@ -423,6 +457,7 @@ export interface EnrichStats {
   websitesDiscovered: number;
   phonesUpdated: number;
   hoursUpdated: number;
+  deactivated: number;
   failed: number;
   details: string[];
 }
@@ -436,7 +471,7 @@ async function enrichListings(prisma: PrismaClient, options: EnrichOptions = {})
   const stats: EnrichStats = {
     total: 0, scraped: 0, descriptionsUpdated: 0, titlesFixed: 0,
     photosAdded: 0, socialLinksAdded: 0, websitesDiscovered: 0,
-    phonesUpdated: 0, hoursUpdated: 0, failed: 0, details: [],
+    phonesUpdated: 0, hoursUpdated: 0, deactivated: 0, failed: 0, details: [],
   };
 
   // Build query — all active scraped listings
@@ -520,6 +555,24 @@ async function enrichListings(prisma: PrismaClient, options: EnrichOptions = {})
           updates.latitude = placeData.location.latitude;
           updates.longitude = placeData.location.longitude;
           updateDetails.push(`+coords`);
+        }
+
+        // Check address/country mismatch — deactivate if Google address is in a different country
+        if (placeData.formattedAddress) {
+          const gAddr = placeData.formattedAddress.toLowerCase();
+          const countryMismatch = detectCountryMismatch(listing.country, gAddr);
+          if (countryMismatch) {
+            console.log(`    ⚠ Country mismatch: listing says "${listing.country}" but Google says "${placeData.formattedAddress}"`);
+            if (!dryRun) {
+              await prisma.listing.update({
+                where: { id: listing.id },
+                data: { isActive: false },
+              });
+            }
+            stats.deactivated++;
+            stats.details.push(`DEACTIVATED: ${listing.title} — country mismatch (listed: ${listing.country}, Google: ${placeData.formattedAddress})`);
+            continue; // skip rest of enrichment for this listing
+          }
         }
       }
 
@@ -720,6 +773,7 @@ if (require.main === module) {
       console.log(`  Websites discovered: ${stats.websitesDiscovered}`);
       console.log(`  Phones updated: ${stats.phonesUpdated}`);
       console.log(`  Hours updated: ${stats.hoursUpdated}`);
+      console.log(`  Deactivated (country mismatch): ${stats.deactivated}`);
       console.log('');
       prisma.$disconnect();
     })
