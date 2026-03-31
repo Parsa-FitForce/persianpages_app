@@ -153,4 +153,41 @@ router.post('/fix-phones', async (req: Request, res: Response) => {
   res.json({ dryRun, fixed, alreadyOk, failed, total: listings.length, changes });
 });
 
+// PATCH /api/scrape/listing/:id — admin endpoint to update any listing fields
+router.patch('/listing/:id', async (req: Request, res: Response) => {
+  const apiKey = req.headers['x-scrape-key'];
+  const expectedKey = process.env.ADMIN_API_KEY;
+  if (!apiKey || apiKey !== expectedKey) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { id } = req.params;
+  const allowedFields = [
+    'title', 'description', 'phone', 'address', 'city', 'country',
+    'website', 'socialLinks', 'businessHours', 'photos', 'photoAttributions',
+    'latitude', 'longitude', 'isActive', 'slug',
+  ];
+
+  const data: any = {};
+  for (const field of allowedFields) {
+    if (req.body[field] !== undefined) {
+      data[field] = req.body[field];
+    }
+  }
+
+  if (Object.keys(data).length === 0) {
+    return res.status(400).json({ error: 'No valid fields to update' });
+  }
+
+  try {
+    const listing = await prisma.listing.update({
+      where: { id },
+      data,
+    });
+    res.json({ ok: true, id: listing.id, title: listing.title, updated: Object.keys(data) });
+  } catch (err: any) {
+    res.status(404).json({ error: `Listing not found or update failed: ${err.message}` });
+  }
+});
+
 export default router;
