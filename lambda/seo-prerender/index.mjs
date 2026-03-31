@@ -226,14 +226,13 @@ export async function handler(event) {
     return response;
   }
 
-  // Get the HTML body — either from the response (200) or fetch index.html from S3 (403/404)
+  // Get the HTML body — either from the response (200) or fetch index.html
   let html;
   if (isDirectHtml && response.body) {
     html = response.body;
   } else if (isSpaFallback) {
-    // Fetch index.html from the S3 origin via CloudFront's own domain
-    const s3Domain = request.origin.s3.domainName;
-    html = await fetchHtml(s3Domain, '/index.html');
+    // Fetch index.html through CloudFront itself (S3 is private/OAC-only)
+    html = await fetchHtml('persianpages.com', '/index.html');
     if (!html) {
       return response;
     }

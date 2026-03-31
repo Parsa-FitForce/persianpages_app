@@ -70,7 +70,7 @@ resource "aws_cloudfront_distribution" "frontend" {
     lambda_function_association {
       event_type   = "origin-response"
       lambda_arn   = aws_lambda_function.seo_prerender.qualified_arn
-      include_body = true
+      include_body = false
     }
 
     viewer_protocol_policy = "redirect-to-https"
