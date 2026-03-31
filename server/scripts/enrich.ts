@@ -422,7 +422,7 @@ RESPOND ONLY with valid JSON (no markdown, no backticks):
 {"titleFa": "...", "description": "..."}`;
 
   try {
-    const content = await callLLM(prompt, { maxTokens: 800 });
+    const content = await callLLM(prompt, { maxTokens: 800, model: 'gpt-4o' });
     if (!content) return null;
 
     // Parse JSON — handle possible markdown wrapping
