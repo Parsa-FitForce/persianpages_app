@@ -387,7 +387,7 @@ export default function ListingDetail() {
               <div className="space-y-3">
                 {listing.socialLinks.instagram && (
                   <a
-                    href={`https://instagram.com/${listing.socialLinks.instagram}`}
+                    href={listing.socialLinks.instagram.startsWith('http') ? listing.socialLinks.instagram : `https://instagram.com/${listing.socialLinks.instagram}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-3 text-primary-600 hover:underline"
@@ -395,9 +395,19 @@ export default function ListingDetail() {
                     اینستاگرام
                   </a>
                 )}
+                {listing.socialLinks.facebook && (
+                  <a
+                    href={listing.socialLinks.facebook.startsWith('http') ? listing.socialLinks.facebook : `https://facebook.com/${listing.socialLinks.facebook}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 text-primary-600 hover:underline"
+                  >
+                    فیسبوک
+                  </a>
+                )}
                 {listing.socialLinks.telegram && (
                   <a
-                    href={`https://t.me/${listing.socialLinks.telegram}`}
+                    href={listing.socialLinks.telegram.startsWith('http') ? listing.socialLinks.telegram : `https://t.me/${listing.socialLinks.telegram}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-3 text-primary-600 hover:underline"
@@ -407,12 +417,32 @@ export default function ListingDetail() {
                 )}
                 {listing.socialLinks.whatsapp && (
                   <a
-                    href={`https://wa.me/${listing.socialLinks.whatsapp}`}
+                    href={listing.socialLinks.whatsapp.startsWith('http') ? listing.socialLinks.whatsapp : `https://wa.me/${listing.socialLinks.whatsapp}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-3 text-primary-600 hover:underline"
                   >
                     واتساپ
+                  </a>
+                )}
+                {listing.socialLinks.youtube && (
+                  <a
+                    href={listing.socialLinks.youtube.startsWith('http') ? listing.socialLinks.youtube : `https://youtube.com/${listing.socialLinks.youtube}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 text-primary-600 hover:underline"
+                  >
+                    یوتیوب
+                  </a>
+                )}
+                {listing.socialLinks.tiktok && (
+                  <a
+                    href={listing.socialLinks.tiktok.startsWith('http') ? listing.socialLinks.tiktok : `https://tiktok.com/${listing.socialLinks.tiktok}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 text-primary-600 hover:underline"
+                  >
+                    تیک‌تاک
                   </a>
                 )}
               </div>
