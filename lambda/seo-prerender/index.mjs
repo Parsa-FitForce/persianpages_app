@@ -2,13 +2,21 @@ import https from 'https';
 
 const BOT_UA_PATTERN = /googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|linkedinbot|slackbot|whatsapp|telegrambot|applebot|duckduckbot|seznambot|pinterestbot/i;
 
+// Each entry returns a distinct metaPath so no two routes dedupe.
+// Ordering matters: more-specific patterns must come before generic ones.
 const ROUTE_PATTERNS = [
-  { pattern: /^\/listing\/([^/]+)\/?$/, type: 'listing', idIndex: 1 },
-  { pattern: /^\/category\/([^/]+)\/?$/, type: 'category', idIndex: 1 },
-  { pattern: /^\/browse\/([a-z]{2})\/?$/, type: 'browse-country', idIndex: 1 },
-  { pattern: /^\/browse\/([a-z]{2})\/category\/([^/]+)\/?$/, type: 'browse-country', idIndex: 1 },
-  { pattern: /^\/browse\/([a-z]{2})\/([^/]+)\/?$/, type: 'browse-city', idIndex: 0 },
-  { pattern: /^\/browse\/([a-z]{2})\/([^/]+)\/([^/]+)\/?$/, type: 'browse-city', idIndex: 0 },
+  { pattern: /^\/listing\/([^/]+)\/?$/,
+    build: (m) => ({ type: 'listing', metaPath: `/api/meta/listing/${m[1]}` }) },
+  { pattern: /^\/category\/([^/]+)\/?$/,
+    build: (m) => ({ type: 'category', metaPath: `/api/meta/category/${m[1]}` }) },
+  { pattern: /^\/browse\/([a-z]{2})\/category\/([^/]+)\/?$/,
+    build: (m) => ({ type: 'browse-country-category', metaPath: `/api/meta/browse/${m[1]}/category/${m[2]}` }) },
+  { pattern: /^\/browse\/([a-z]{2})\/([^/]+)\/([^/]+)\/?$/,
+    build: (m) => ({ type: 'browse-city-category', metaPath: `/api/meta/browse/${m[1]}/${m[2]}/${m[3]}` }) },
+  { pattern: /^\/browse\/([a-z]{2})\/([^/]+)\/?$/,
+    build: (m) => ({ type: 'browse-city', metaPath: `/api/meta/browse/${m[1]}/${m[2]}` }) },
+  { pattern: /^\/browse\/([a-z]{2})\/?$/,
+    build: (m) => ({ type: 'browse-country', metaPath: `/api/meta/browse/${m[1]}` }) },
 ];
 
 const STATIC_PAGES = {
@@ -32,22 +40,16 @@ function parseRoute(uri) {
   for (const route of ROUTE_PATTERNS) {
     const match = uri.match(route.pattern);
     if (match) {
-      if (route.type === 'browse-country') {
-        return { type: 'browse-country', id: match[1] };
-      }
-      if (route.type === 'browse-city') {
-        return { type: 'browse-city', id: `${match[1]}/${match[2]}` };
-      }
-      return { type: route.type, id: match[route.idIndex] };
+      return route.build(match);
     }
   }
   if (uri === '/' || uri === '/index.html') {
-    return { type: 'home', id: '' };
+    return { type: 'home' };
   }
   // Strip trailing slash for static-page lookup
   const normalized = uri.length > 1 && uri.endsWith('/') ? uri.slice(0, -1) : uri;
   if (STATIC_PAGES[normalized]) {
-    return { type: 'static', id: normalized };
+    return { type: 'static', staticPath: normalized };
   }
   return null;
 }
@@ -245,18 +247,9 @@ export async function handler(event) {
   if (route.type === 'home') {
     data = HOMEPAGE_META;
   } else if (route.type === 'static') {
-    data = STATIC_PAGES[route.id];
+    data = STATIC_PAGES[route.staticPath];
   } else {
-    const apiHost = 'api.persianpages.com';
-    let metaPath;
-    if (route.type === 'browse-country') {
-      metaPath = `/api/meta/browse/${route.id}`;
-    } else if (route.type === 'browse-city') {
-      metaPath = `/api/meta/browse/${route.id}`;
-    } else {
-      metaPath = `/api/meta/${route.type}/${route.id}`;
-    }
-    data = await fetchJson(apiHost, metaPath);
+    data = await fetchJson('api.persianpages.com', route.metaPath);
   }
 
   if (!data) {

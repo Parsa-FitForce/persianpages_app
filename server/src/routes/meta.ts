@@ -86,6 +86,91 @@ router.get('/browse/:countryCode', async (req: Request, res: Response) => {
   }
 });
 
+// Browse: country + category meta (must come before the generic :citySlug route)
+router.get('/browse/:countryCode/category/:categorySlug', async (req: Request, res: Response) => {
+  try {
+    const country = COUNTRY_NAMES[req.params.countryCode];
+    if (!country) return res.json(FALLBACK_META);
+
+    const category = await prisma.category.findUnique({ where: { slug: req.params.categorySlug } });
+    if (!category) return res.json(FALLBACK_META);
+
+    const listingCount = await prisma.listing.count({
+      where: { country: country.name, categoryId: category.id, isActive: true },
+    });
+
+    const url = `${SITE_URL}/browse/${req.params.countryCode}/category/${req.params.categorySlug}`;
+    const title = `${category.nameFa} ایرانی در ${country.name} | ${SITE_NAME}`;
+    const description = `مشاهده ${listingCount} ${category.nameFa} ایرانی در ${country.name} - ${SITE_NAME}`;
+
+    return res.json({
+      title,
+      description,
+      image: DEFAULT_IMAGE,
+      url,
+      type: 'CollectionPage',
+      jsonLd: {
+        '@context': 'https://schema.org',
+        '@type': 'CollectionPage',
+        name: title,
+        description,
+        url,
+        numberOfItems: listingCount,
+        isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL },
+      },
+    });
+  } catch (error) {
+    console.error('Meta API error:', error);
+    res.json(FALLBACK_META);
+  }
+});
+
+// Browse: city + category meta (4 segments — must come before 3-segment :citySlug route)
+router.get('/browse/:countryCode/:citySlug/:categorySlug', async (req: Request, res: Response) => {
+  try {
+    const country = COUNTRY_NAMES[req.params.countryCode];
+    if (!country) return res.json(FALLBACK_META);
+
+    const category = await prisma.category.findUnique({ where: { slug: req.params.categorySlug } });
+    if (!category) return res.json(FALLBACK_META);
+
+    const cityName = slugToCity(req.params.citySlug);
+
+    const listingCount = await prisma.listing.count({
+      where: {
+        country: country.name,
+        city: { contains: cityName, mode: 'insensitive' },
+        categoryId: category.id,
+        isActive: true,
+      },
+    });
+
+    const url = `${SITE_URL}/browse/${req.params.countryCode}/${req.params.citySlug}/${req.params.categorySlug}`;
+    const title = `${category.nameFa} ایرانی در ${cityName}, ${country.name} | ${SITE_NAME}`;
+    const description = `مشاهده ${listingCount} ${category.nameFa} ایرانی در ${cityName} - ${SITE_NAME}`;
+
+    return res.json({
+      title,
+      description,
+      image: DEFAULT_IMAGE,
+      url,
+      type: 'CollectionPage',
+      jsonLd: {
+        '@context': 'https://schema.org',
+        '@type': 'CollectionPage',
+        name: title,
+        description,
+        url,
+        numberOfItems: listingCount,
+        isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL },
+      },
+    });
+  } catch (error) {
+    console.error('Meta API error:', error);
+    res.json(FALLBACK_META);
+  }
+});
+
 // Browse: city page meta
 router.get('/browse/:countryCode/:citySlug', async (req: Request, res: Response) => {
   try {

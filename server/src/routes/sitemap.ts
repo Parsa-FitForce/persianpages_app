@@ -287,7 +287,7 @@ router.get('/sitemap-browse.xml', async (_req: Request, res: Response) => {
       }
     }
 
-    // City pages
+    // City pages + city/category combinations
     for (const city of BROWSE_CITIES) {
       const slug = toSlug(city.nameEn);
       const persianName = COUNTRY_NAMES[city.country];
@@ -300,6 +300,15 @@ router.get('/sitemap-browse.xml', async (_req: Request, res: Response) => {
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>`);
+
+      for (const cat of categories) {
+        urls.push(`  <url>
+    <loc>${SITE_URL}/browse/${city.country}/${slug}/${cat.slug}</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>`);
+      }
     }
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
