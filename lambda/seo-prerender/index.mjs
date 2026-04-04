@@ -11,6 +11,23 @@ const ROUTE_PATTERNS = [
   { pattern: /^\/browse\/([a-z]{2})\/([^/]+)\/([^/]+)\/?$/, type: 'browse-city', idIndex: 0 },
 ];
 
+const STATIC_PAGES = {
+  '/terms': {
+    title: 'Terms & Conditions | شرایط استفاده | PersianPages',
+    description: 'PersianPages terms and conditions of use.',
+    url: 'https://persianpages.com/terms',
+    type: 'website',
+    noindex: true,
+  },
+  '/privacy': {
+    title: 'Privacy Policy | حریم خصوصی | PersianPages',
+    description: 'PersianPages privacy policy - how we collect, use, and protect your personal information.',
+    url: 'https://persianpages.com/privacy',
+    type: 'website',
+    noindex: true,
+  },
+};
+
 function parseRoute(uri) {
   for (const route of ROUTE_PATTERNS) {
     const match = uri.match(route.pattern);
@@ -26,6 +43,11 @@ function parseRoute(uri) {
   }
   if (uri === '/' || uri === '/index.html') {
     return { type: 'home', id: '' };
+  }
+  // Strip trailing slash for static-page lookup
+  const normalized = uri.length > 1 && uri.endsWith('/') ? uri.slice(0, -1) : uri;
+  if (STATIC_PAGES[normalized]) {
+    return { type: 'static', id: normalized };
   }
   return null;
 }
@@ -137,6 +159,11 @@ function buildMetaTags(data) {
   // Canonical URL
   tags.push(`<link rel="canonical" href="${escapeHtml(data.url)}">`);
 
+  // Robots directive (override the static index.html default of "index, follow")
+  if (data.noindex) {
+    tags.push(`<meta name="robots" content="noindex, follow">`);
+  }
+
   // JSON-LD
   if (data.jsonLd) {
     tags.push(`<script type="application/ld+json">${JSON.stringify(data.jsonLd)}</script>`);
@@ -150,6 +177,14 @@ function injectMeta(html, data) {
 
   // Replace existing <title> if present
   html = html.replace(/<title>[^<]*<\/title>/, '');
+
+  // Strip existing canonical / robots / description / OG / Twitter tags from
+  // the static index.html so our per-route versions are the only signal.
+  html = html.replace(/<link[^>]+rel=["']canonical["'][^>]*>\s*/gi, '');
+  html = html.replace(/<meta[^>]+name=["']robots["'][^>]*>\s*/gi, '');
+  html = html.replace(/<meta[^>]+name=["']description["'][^>]*>\s*/gi, '');
+  html = html.replace(/<meta[^>]+property=["']og:[^"']+["'][^>]*>\s*/gi, '');
+  html = html.replace(/<meta[^>]+name=["']twitter:[^"']+["'][^>]*>\s*/gi, '');
 
   // Inject after <head>
   const headMatch = html.match(/<head[^>]*>/i);
@@ -209,6 +244,8 @@ export async function handler(event) {
   let data;
   if (route.type === 'home') {
     data = HOMEPAGE_META;
+  } else if (route.type === 'static') {
+    data = STATIC_PAGES[route.id];
   } else {
     const apiHost = 'api.persianpages.com';
     let metaPath;
