@@ -32,6 +32,9 @@ export interface Listing {
     instagram?: string;
     telegram?: string;
     whatsapp?: string;
+    facebook?: string;
+    youtube?: string;
+    tiktok?: string;
   };
   businessHours?: {
     [key: string]: string;
