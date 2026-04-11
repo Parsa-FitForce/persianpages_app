@@ -192,7 +192,17 @@ function injectMeta(html, data) {
   const headMatch = html.match(/<head[^>]*>/i);
   if (headMatch) {
     const insertPos = headMatch.index + headMatch[0].length;
-    return html.slice(0, insertPos) + '\n    ' + metaTags + '\n' + html.slice(insertPos);
+    html = html.slice(0, insertPos) + '\n    ' + metaTags + '\n' + html.slice(insertPos);
+  }
+
+  // Inject body content into the empty React root so bots see real HTML
+  // (not just meta tags). Without this, Google sees thousands of pages
+  // with identical empty bodies and treats them as thin/duplicate content.
+  if (data.bodyHtml) {
+    html = html.replace(
+      /<div id="root"><\/div>/,
+      `<div id="root">${data.bodyHtml}</div>`
+    );
   }
 
   return html;

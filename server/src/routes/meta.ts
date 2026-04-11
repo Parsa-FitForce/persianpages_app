@@ -169,6 +169,64 @@ function resolveCity(slug: string): { nameFa: string; nameEn: string } {
   return { nameFa: nameEn, nameEn };
 }
 
+function esc(s: string | null | undefined): string {
+  if (!s) return '';
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+type BrowseListing = {
+  slug: string | null;
+  id: string;
+  title: string;
+  description: string;
+  city: string;
+  category: { nameFa: string };
+};
+
+function renderBrowseBody(opts: {
+  h1: string;
+  intro: string;
+  listings: BrowseListing[];
+  totalCount: number;
+}): string {
+  const { h1, intro, listings, totalCount } = opts;
+  const items = listings
+    .map((l) => {
+      const href = `/listing/${l.slug || l.id}`;
+      const desc = l.description ? l.description.substring(0, 180) : '';
+      return `<li><article><h2><a href="${esc(href)}">${esc(l.title)}</a></h2><p>${esc(l.category.nameFa)} — ${esc(l.city)}</p>${desc ? `<p>${esc(desc)}</p>` : ''}</article></li>`;
+    })
+    .join('');
+  return `<main><h1>${esc(h1)}</h1><p>${esc(intro)}</p><p>تعداد کل: ${totalCount}</p><ul>${items}</ul></main>`;
+}
+
+function renderListingBody(listing: {
+  title: string;
+  description: string;
+  address: string;
+  city: string;
+  country: string;
+  phone: string | null;
+  website: string | null;
+  category: { nameFa: string };
+}): string {
+  const parts: string[] = [];
+  parts.push(`<h1>${esc(listing.title)}</h1>`);
+  parts.push(`<p><strong>${esc(listing.category.nameFa)}</strong></p>`);
+  if (listing.description) parts.push(`<p>${esc(listing.description)}</p>`);
+  parts.push(`<address><p>${esc(listing.address)}</p><p>${esc(listing.city)}، ${esc(listing.country)}</p></address>`);
+  if (listing.phone) parts.push(`<p>تلفن: <a href="tel:${esc(listing.phone)}">${esc(listing.phone)}</a></p>`);
+  if (listing.website) parts.push(`<p>وب‌سایت: <a href="${esc(listing.website)}" rel="nofollow">${esc(listing.website)}</a></p>`);
+  return `<main>${parts.join('')}</main>`;
+}
+
+const BROWSE_PAGE_SIZE = 50;
+
 const FALLBACK_META = {
   title: `${SITE_NAME} | دایرکتوری مشاغل ایرانی`,
   description: 'دایرکتوری آنلاین مشاغل ایرانی در کانادا - رستوران، پزشک، وکیل، املاک و خدمات ایرانی',
@@ -190,13 +248,26 @@ router.get('/browse/:countryCode', async (req: Request, res: Response) => {
     const country = COUNTRY_NAMES[req.params.countryCode];
     if (!country) return res.json(FALLBACK_META);
 
-    const listingCount = await prisma.listing.count({
-      where: { country: country.name, isActive: true },
-    });
+    const where = { country: country.name, isActive: true };
+    const [listingCount, listings] = await Promise.all([
+      prisma.listing.count({ where }),
+      prisma.listing.findMany({
+        where,
+        select: { id: true, slug: true, title: true, description: true, city: true, category: { select: { nameFa: true } } },
+        orderBy: { updatedAt: 'desc' },
+        take: BROWSE_PAGE_SIZE,
+      }),
+    ]);
 
     const url = `${SITE_URL}/browse/${req.params.countryCode}`;
     const title = `کسب‌وکارهای ایرانی در ${country.name} | ${SITE_NAME}`;
     const description = `مشاهده ${listingCount} کسب‌وکار ایرانی در ${country.name} - ${SITE_NAME}`;
+    const bodyHtml = renderBrowseBody({
+      h1: `کسب‌وکارهای ایرانی در ${country.name}`,
+      intro: `راهنمای جامع کسب‌وکارهای ایرانی در ${country.name} - شامل رستوران، پزشک، وکیل، املاک، خدمات و سایر مشاغل ایرانی.`,
+      listings,
+      totalCount: listingCount,
+    });
 
     return res.json({
       title,
@@ -204,6 +275,7 @@ router.get('/browse/:countryCode', async (req: Request, res: Response) => {
       image: DEFAULT_IMAGE,
       url,
       type: 'CollectionPage',
+      bodyHtml,
       jsonLd: {
         '@context': 'https://schema.org',
         '@type': 'CollectionPage',
@@ -228,13 +300,26 @@ router.get('/browse/:countryCode/category/:categorySlug', async (req: Request, r
     const category = await prisma.category.findUnique({ where: { slug: req.params.categorySlug } });
     if (!category) return res.json(FALLBACK_META);
 
-    const listingCount = await prisma.listing.count({
-      where: { country: country.name, categoryId: category.id, isActive: true },
-    });
+    const where = { country: country.name, categoryId: category.id, isActive: true };
+    const [listingCount, listings] = await Promise.all([
+      prisma.listing.count({ where }),
+      prisma.listing.findMany({
+        where,
+        select: { id: true, slug: true, title: true, description: true, city: true, category: { select: { nameFa: true } } },
+        orderBy: { updatedAt: 'desc' },
+        take: BROWSE_PAGE_SIZE,
+      }),
+    ]);
 
     const url = `${SITE_URL}/browse/${req.params.countryCode}/category/${req.params.categorySlug}`;
     const title = `${category.nameFa} ایرانی در ${country.name} | ${SITE_NAME}`;
     const description = `مشاهده ${listingCount} ${category.nameFa} ایرانی در ${country.name} - ${SITE_NAME}`;
+    const bodyHtml = renderBrowseBody({
+      h1: `${category.nameFa} ایرانی در ${country.name}`,
+      intro: `لیست کامل ${category.nameFa} ایرانی در ${country.name}. اطلاعات تماس، آدرس و توضیحات هر کسب‌وکار.`,
+      listings,
+      totalCount: listingCount,
+    });
 
     return res.json({
       title,
@@ -242,6 +327,7 @@ router.get('/browse/:countryCode/category/:categorySlug', async (req: Request, r
       image: DEFAULT_IMAGE,
       url,
       type: 'CollectionPage',
+      bodyHtml,
       jsonLd: {
         '@context': 'https://schema.org',
         '@type': 'CollectionPage',
@@ -269,18 +355,31 @@ router.get('/browse/:countryCode/:citySlug/:categorySlug', async (req: Request, 
 
     const city = resolveCity(req.params.citySlug);
 
-    const listingCount = await prisma.listing.count({
-      where: {
-        country: country.name,
-        city: { contains: city.nameFa, mode: 'insensitive' },
-        categoryId: category.id,
-        isActive: true,
-      },
-    });
+    const where = {
+      country: country.name,
+      city: { contains: city.nameFa, mode: 'insensitive' as const },
+      categoryId: category.id,
+      isActive: true,
+    };
+    const [listingCount, listings] = await Promise.all([
+      prisma.listing.count({ where }),
+      prisma.listing.findMany({
+        where,
+        select: { id: true, slug: true, title: true, description: true, city: true, category: { select: { nameFa: true } } },
+        orderBy: { updatedAt: 'desc' },
+        take: BROWSE_PAGE_SIZE,
+      }),
+    ]);
 
     const url = `${SITE_URL}/browse/${req.params.countryCode}/${req.params.citySlug}/${req.params.categorySlug}`;
     const title = `${category.nameFa} ایرانی در ${city.nameFa}, ${country.name} | ${SITE_NAME}`;
     const description = `مشاهده ${listingCount} ${category.nameFa} ایرانی در ${city.nameFa} - ${SITE_NAME}`;
+    const bodyHtml = renderBrowseBody({
+      h1: `${category.nameFa} ایرانی در ${city.nameFa}`,
+      intro: `لیست ${category.nameFa} ایرانی در شهر ${city.nameFa}، ${country.name}.`,
+      listings,
+      totalCount: listingCount,
+    });
 
     return res.json({
       title,
@@ -288,6 +387,7 @@ router.get('/browse/:countryCode/:citySlug/:categorySlug', async (req: Request, 
       image: DEFAULT_IMAGE,
       url,
       type: 'CollectionPage',
+      bodyHtml,
       jsonLd: {
         '@context': 'https://schema.org',
         '@type': 'CollectionPage',
@@ -312,13 +412,30 @@ router.get('/browse/:countryCode/:citySlug', async (req: Request, res: Response)
 
     const city = resolveCity(req.params.citySlug);
 
-    const listingCount = await prisma.listing.count({
-      where: { country: country.name, city: { contains: city.nameFa, mode: 'insensitive' }, isActive: true },
-    });
+    const where = {
+      country: country.name,
+      city: { contains: city.nameFa, mode: 'insensitive' as const },
+      isActive: true,
+    };
+    const [listingCount, listings] = await Promise.all([
+      prisma.listing.count({ where }),
+      prisma.listing.findMany({
+        where,
+        select: { id: true, slug: true, title: true, description: true, city: true, category: { select: { nameFa: true } } },
+        orderBy: { updatedAt: 'desc' },
+        take: BROWSE_PAGE_SIZE,
+      }),
+    ]);
 
     const url = `${SITE_URL}/browse/${req.params.countryCode}/${req.params.citySlug}`;
     const title = `کسب‌وکارهای ایرانی در ${city.nameFa}, ${country.name} | ${SITE_NAME}`;
     const description = `مشاهده ${listingCount} کسب‌وکار ایرانی در ${city.nameFa} - ${SITE_NAME}`;
+    const bodyHtml = renderBrowseBody({
+      h1: `کسب‌وکارهای ایرانی در ${city.nameFa}`,
+      intro: `راهنمای کسب‌وکارهای ایرانی در شهر ${city.nameFa}، ${country.name}.`,
+      listings,
+      totalCount: listingCount,
+    });
 
     return res.json({
       title,
@@ -326,6 +443,7 @@ router.get('/browse/:countryCode/:citySlug', async (req: Request, res: Response)
       image: DEFAULT_IMAGE,
       url,
       type: 'CollectionPage',
+      bodyHtml,
       jsonLd: {
         '@context': 'https://schema.org',
         '@type': 'CollectionPage',
@@ -368,12 +486,15 @@ router.get('/:type/:id', async (req: Request, res: Response) => {
         ? listing.description.substring(0, 160)
         : `${listing.title} - ${listing.category.nameFa} در ${listing.city}`;
 
+      const bodyHtml = renderListingBody(listing);
+
       return res.json({
         title: `${listing.title} | ${SITE_NAME}`,
         description,
         image,
         url,
         type: 'LocalBusiness',
+        bodyHtml,
         jsonLd: {
           '@context': 'https://schema.org',
           '@type': 'LocalBusiness',
