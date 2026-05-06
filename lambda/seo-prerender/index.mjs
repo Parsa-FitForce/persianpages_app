@@ -1,6 +1,6 @@
 import https from 'https';
 
-const BOT_UA_PATTERN = /googlebot|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|linkedinbot|slackbot|whatsapp|telegrambot|applebot|duckduckbot|seznambot|pinterestbot/i;
+const BOT_UA_PATTERN = /googlebot|google-inspectiontool|adsbot-google|mediapartners-google|storebot-google|googleother|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|linkedinbot|slackbot|whatsapp|telegrambot|applebot|duckduckbot|seznambot|pinterestbot/i;
 
 // Each entry returns a distinct metaPath so no two routes dedupe.
 // Ordering matters: more-specific patterns must come before generic ones.

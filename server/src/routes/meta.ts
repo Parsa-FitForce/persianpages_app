@@ -169,6 +169,22 @@ function resolveCity(slug: string): { nameFa: string; nameEn: string } {
   return { nameFa: nameEn, nameEn };
 }
 
+const COUNTRY_FA_TO_CODE: Record<string, string> = Object.fromEntries(
+  Object.entries(COUNTRY_NAMES).map(([code, { name }]) => [name, code])
+);
+
+const CITY_FA_TO_SLUG: Record<string, string> = Object.fromEntries(
+  Object.entries(CITIES_BY_SLUG).map(([slug, { nameFa }]) => [nameFa, slug])
+);
+
+function countryCodeFromFa(name: string): string | null {
+  return COUNTRY_FA_TO_CODE[name] || null;
+}
+
+function citySlugFromFa(name: string): string | null {
+  return CITY_FA_TO_SLUG[name] || null;
+}
+
 function esc(s: string | null | undefined): string {
   if (!s) return '';
   return s
@@ -188,44 +204,181 @@ type BrowseListing = {
   category: { nameFa: string };
 };
 
+type BreadcrumbItem = { label: string; href?: string };
+type NavLink = { label: string; href: string };
+
+function renderBreadcrumbs(items: BreadcrumbItem[]): string {
+  if (items.length === 0) return '';
+  const parts = items.map((item, i) => {
+    const isLast = i === items.length - 1;
+    if (item.href && !isLast) {
+      return `<li><a href="${esc(item.href)}">${esc(item.label)}</a></li>`;
+    }
+    return `<li>${esc(item.label)}</li>`;
+  });
+  return `<nav aria-label="مسیر"><ol>${parts.join('')}</ol></nav>`;
+}
+
+function breadcrumbJsonLd(items: BreadcrumbItem[]): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((item, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: item.label,
+      ...(item.href ? { item: item.href.startsWith('http') ? item.href : `${SITE_URL}${item.href}` } : {}),
+    })),
+  };
+}
+
+function renderNavLinks(heading: string, links: NavLink[]): string {
+  if (links.length === 0) return '';
+  const items = links
+    .map((l) => `<li><a href="${esc(l.href)}">${esc(l.label)}</a></li>`)
+    .join('');
+  return `<section><h2>${esc(heading)}</h2><ul>${items}</ul></section>`;
+}
+
 function renderBrowseBody(opts: {
   h1: string;
   intro: string;
   listings: BrowseListing[];
   totalCount: number;
+  breadcrumbs?: BreadcrumbItem[];
+  navSections?: { heading: string; links: NavLink[] }[];
 }): string {
-  const { h1, intro, listings, totalCount } = opts;
+  const { h1, intro, listings, totalCount, breadcrumbs = [], navSections = [] } = opts;
   const items = listings
     .map((l) => {
       const href = `/listing/${l.slug || l.id}`;
-      const desc = l.description ? l.description.substring(0, 180) : '';
+      const desc = l.description ? l.description.substring(0, 220) : '';
       return `<li><article><h2><a href="${esc(href)}">${esc(l.title)}</a></h2><p>${esc(l.category.nameFa)} — ${esc(l.city)}</p>${desc ? `<p>${esc(desc)}</p>` : ''}</article></li>`;
     })
     .join('');
-  return `<main><h1>${esc(h1)}</h1><p>${esc(intro)}</p><p>تعداد کل: ${totalCount}</p><ul>${items}</ul></main>`;
+  const navHtml = navSections.map((s) => renderNavLinks(s.heading, s.links)).join('');
+  return `<main>${renderBreadcrumbs(breadcrumbs)}<h1>${esc(h1)}</h1><p>${esc(intro)}</p><p>تعداد کل: ${totalCount}</p><ul>${items}</ul>${navHtml}</main>`;
 }
 
-function renderListingBody(listing: {
-  title: string;
-  description: string;
-  address: string;
-  city: string;
-  country: string;
-  phone: string | null;
-  website: string | null;
-  category: { nameFa: string };
+const DAY_LABELS_FA: Record<string, string> = {
+  monday: 'دوشنبه',
+  tuesday: 'سه‌شنبه',
+  wednesday: 'چهارشنبه',
+  thursday: 'پنج‌شنبه',
+  friday: 'جمعه',
+  saturday: 'شنبه',
+  sunday: 'یکشنبه',
+};
+const DAY_ORDER = ['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+
+function renderBusinessHours(hours: unknown): string {
+  if (!hours || typeof hours !== 'object') return '';
+  const obj = hours as Record<string, unknown>;
+  const rows: string[] = [];
+  for (const day of DAY_ORDER) {
+    const value = obj[day];
+    if (value === undefined || value === null) continue;
+    const label = DAY_LABELS_FA[day] || day;
+    let display: string;
+    if (value === 'closed' || value === false) {
+      display = 'تعطیل';
+    } else if (typeof value === 'string') {
+      display = value;
+    } else if (typeof value === 'object' && value !== null) {
+      const v = value as { open?: string; close?: string };
+      if (v.open && v.close) display = `${v.open} - ${v.close}`;
+      else continue;
+    } else {
+      continue;
+    }
+    rows.push(`<tr><th scope="row">${esc(label)}</th><td>${esc(display)}</td></tr>`);
+  }
+  if (rows.length === 0) return '';
+  return `<section><h2>ساعات کاری</h2><table><tbody>${rows.join('')}</tbody></table></section>`;
+}
+
+const SOCIAL_LABELS_FA: Record<string, string> = {
+  instagram: 'اینستاگرام',
+  facebook: 'فیسبوک',
+  twitter: 'توییتر',
+  telegram: 'تلگرام',
+  youtube: 'یوتیوب',
+  tiktok: 'تیک‌تاک',
+  linkedin: 'لینکدین',
+  whatsapp: 'واتساپ',
+};
+
+function renderSocialLinks(links: unknown): string {
+  if (!links || typeof links !== 'object') return '';
+  const obj = links as Record<string, unknown>;
+  const items: string[] = [];
+  for (const [key, val] of Object.entries(obj)) {
+    if (typeof val !== 'string' || !val) continue;
+    const url = val.startsWith('http') ? val : `https://${val}`;
+    const label = SOCIAL_LABELS_FA[key.toLowerCase()] || key;
+    items.push(`<li><a href="${esc(url)}" rel="nofollow noopener">${esc(label)}</a></li>`);
+  }
+  if (items.length === 0) return '';
+  return `<section><h2>شبکه‌های اجتماعی</h2><ul>${items.join('')}</ul></section>`;
+}
+
+function renderRelatedListings(heading: string, listings: BrowseListing[]): string {
+  if (listings.length === 0) return '';
+  const items = listings
+    .map((l) => {
+      const href = `/listing/${l.slug || l.id}`;
+      const desc = l.description ? l.description.substring(0, 140) : '';
+      return `<li><article><h3><a href="${esc(href)}">${esc(l.title)}</a></h3><p>${esc(l.category.nameFa)} — ${esc(l.city)}</p>${desc ? `<p>${esc(desc)}</p>` : ''}</article></li>`;
+    })
+    .join('');
+  return `<section><h2>${esc(heading)}</h2><ul>${items}</ul></section>`;
+}
+
+function renderListingBody(opts: {
+  listing: {
+    title: string;
+    description: string;
+    address: string;
+    city: string;
+    country: string;
+    phone: string | null;
+    website: string | null;
+    photos: string[];
+    socialLinks: unknown;
+    businessHours: unknown;
+    category: { nameFa: string };
+  };
+  related: BrowseListing[];
+  breadcrumbs: BreadcrumbItem[];
+  exploreLinks: NavLink[];
 }): string {
+  const { listing, related, breadcrumbs, exploreLinks } = opts;
   const parts: string[] = [];
+  parts.push(renderBreadcrumbs(breadcrumbs));
   parts.push(`<h1>${esc(listing.title)}</h1>`);
-  parts.push(`<p><strong>${esc(listing.category.nameFa)}</strong></p>`);
-  if (listing.description) parts.push(`<p>${esc(listing.description)}</p>`);
-  parts.push(`<address><p>${esc(listing.address)}</p><p>${esc(listing.city)}، ${esc(listing.country)}</p></address>`);
-  if (listing.phone) parts.push(`<p>تلفن: <a href="tel:${esc(listing.phone)}">${esc(listing.phone)}</a></p>`);
-  if (listing.website) parts.push(`<p>وب‌سایت: <a href="${esc(listing.website)}" rel="nofollow">${esc(listing.website)}</a></p>`);
-  return `<main>${parts.join('')}</main>`;
+  parts.push(`<p><strong>${esc(listing.category.nameFa)}</strong> در ${esc(listing.city)}، ${esc(listing.country)}</p>`);
+  if (listing.photos.length > 0) {
+    parts.push(`<figure><img src="${esc(listing.photos[0])}" alt="${esc(listing.title)}" loading="lazy" /></figure>`);
+  }
+  if (listing.description) {
+    parts.push(`<section><h2>درباره ${esc(listing.title)}</h2><p>${esc(listing.description)}</p></section>`);
+  }
+  const contactBits: string[] = [];
+  contactBits.push(`<address><p>${esc(listing.address)}</p><p>${esc(listing.city)}، ${esc(listing.country)}</p></address>`);
+  if (listing.phone) contactBits.push(`<p>تلفن: <a href="tel:${esc(listing.phone)}">${esc(listing.phone)}</a></p>`);
+  if (listing.website) contactBits.push(`<p>وب‌سایت: <a href="${esc(listing.website)}" rel="nofollow">${esc(listing.website)}</a></p>`);
+  parts.push(`<section><h2>اطلاعات تماس</h2>${contactBits.join('')}</section>`);
+  parts.push(renderBusinessHours(listing.businessHours));
+  parts.push(renderSocialLinks(listing.socialLinks));
+  parts.push(renderRelatedListings(`${listing.category.nameFa}های دیگر در ${listing.city}`, related));
+  if (exploreLinks.length > 0) {
+    parts.push(renderNavLinks('کاوش بیشتر', exploreLinks));
+  }
+  return `<main>${parts.filter(Boolean).join('')}</main>`;
 }
 
-const BROWSE_PAGE_SIZE = 50;
+const BROWSE_PAGE_SIZE = 100;
+const RELATED_LIMIT = 8;
 
 const FALLBACK_META = {
   title: `${SITE_NAME} | دایرکتوری مشاغل ایرانی`,
@@ -249,7 +402,7 @@ router.get('/browse/:countryCode', async (req: Request, res: Response) => {
     if (!country) return res.json(FALLBACK_META);
 
     const where = { country: country.name, isActive: true };
-    const [listingCount, listings] = await Promise.all([
+    const [listingCount, listings, categoriesInCountry, citiesAgg] = await Promise.all([
       prisma.listing.count({ where }),
       prisma.listing.findMany({
         where,
@@ -257,16 +410,58 @@ router.get('/browse/:countryCode', async (req: Request, res: Response) => {
         orderBy: { updatedAt: 'desc' },
         take: BROWSE_PAGE_SIZE,
       }),
+      prisma.listing.groupBy({
+        by: ['categoryId'],
+        where,
+        _count: { categoryId: true },
+        orderBy: { _count: { categoryId: 'desc' } },
+        take: 12,
+      }),
+      prisma.listing.groupBy({
+        by: ['city'],
+        where,
+        _count: { city: true },
+        orderBy: { _count: { city: 'desc' } },
+        take: 12,
+      }),
     ]);
+
+    const categoryRecords = await prisma.category.findMany({
+      where: { id: { in: categoriesInCountry.map((c) => c.categoryId) } },
+      select: { id: true, slug: true, nameFa: true },
+    });
+    const catCountMap = new Map(categoriesInCountry.map((c) => [c.categoryId, c._count.categoryId]));
+    const categoryLinks: NavLink[] = categoryRecords
+      .map((c) => ({
+        label: `${c.nameFa} (${catCountMap.get(c.id) || 0})`,
+        href: `/browse/${req.params.countryCode}/category/${c.slug}`,
+      }));
+
+    const cityLinks: NavLink[] = citiesAgg
+      .map((c) => {
+        const slug = citySlugFromFa(c.city);
+        if (!slug) return null;
+        return { label: `${c.city} (${c._count.city})`, href: `/browse/${req.params.countryCode}/${slug}` };
+      })
+      .filter((x): x is NavLink => x !== null);
 
     const url = `${SITE_URL}/browse/${req.params.countryCode}`;
     const title = `کسب‌وکارهای ایرانی در ${country.name} | ${SITE_NAME}`;
     const description = `مشاهده ${listingCount} کسب‌وکار ایرانی در ${country.name} - ${SITE_NAME}`;
+    const breadcrumbs: BreadcrumbItem[] = [
+      { label: SITE_NAME, href: '/' },
+      { label: country.name },
+    ];
     const bodyHtml = renderBrowseBody({
       h1: `کسب‌وکارهای ایرانی در ${country.name}`,
       intro: `راهنمای جامع کسب‌وکارهای ایرانی در ${country.name} - شامل رستوران، پزشک، وکیل، املاک، خدمات و سایر مشاغل ایرانی.`,
       listings,
       totalCount: listingCount,
+      breadcrumbs,
+      navSections: [
+        ...(categoryLinks.length > 0 ? [{ heading: `دسته‌بندی‌ها در ${country.name}`, links: categoryLinks }] : []),
+        ...(cityLinks.length > 0 ? [{ heading: `شهرهای ${country.name}`, links: cityLinks }] : []),
+      ],
     });
 
     return res.json({
@@ -276,14 +471,17 @@ router.get('/browse/:countryCode', async (req: Request, res: Response) => {
       url,
       type: 'CollectionPage',
       bodyHtml,
-      jsonLd: {
-        '@context': 'https://schema.org',
-        '@type': 'CollectionPage',
-        name: title,
-        description,
-        url,
-        isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL },
-      },
+      jsonLd: [
+        {
+          '@context': 'https://schema.org',
+          '@type': 'CollectionPage',
+          name: title,
+          description,
+          url,
+          isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL },
+        },
+        breadcrumbJsonLd(breadcrumbs.map((b, i) => ({ ...b, href: i === breadcrumbs.length - 1 ? url : b.href }))),
+      ],
     });
   } catch (error) {
     console.error('Meta API error:', error);
@@ -301,7 +499,7 @@ router.get('/browse/:countryCode/category/:categorySlug', async (req: Request, r
     if (!category) return res.json(FALLBACK_META);
 
     const where = { country: country.name, categoryId: category.id, isActive: true };
-    const [listingCount, listings] = await Promise.all([
+    const [listingCount, listings, citiesAgg] = await Promise.all([
       prisma.listing.count({ where }),
       prisma.listing.findMany({
         where,
@@ -309,16 +507,53 @@ router.get('/browse/:countryCode/category/:categorySlug', async (req: Request, r
         orderBy: { updatedAt: 'desc' },
         take: BROWSE_PAGE_SIZE,
       }),
+      prisma.listing.groupBy({
+        by: ['city'],
+        where,
+        _count: { city: true },
+        orderBy: { _count: { city: 'desc' } },
+        take: 12,
+      }),
     ]);
+
+    const cityLinks: NavLink[] = citiesAgg
+      .map((c) => {
+        const slug = citySlugFromFa(c.city);
+        if (!slug) return null;
+        return {
+          label: `${category.nameFa} در ${c.city} (${c._count.city})`,
+          href: `/browse/${req.params.countryCode}/${slug}/${req.params.categorySlug}`,
+        };
+      })
+      .filter((x): x is NavLink => x !== null);
+
+    const allCategories = await prisma.category.findMany({
+      where: { id: { not: category.id } },
+      select: { slug: true, nameFa: true },
+    });
+    const otherCategoryLinks: NavLink[] = allCategories.slice(0, 9).map((c) => ({
+      label: `${c.nameFa} ایرانی در ${country.name}`,
+      href: `/browse/${req.params.countryCode}/category/${c.slug}`,
+    }));
 
     const url = `${SITE_URL}/browse/${req.params.countryCode}/category/${req.params.categorySlug}`;
     const title = `${category.nameFa} ایرانی در ${country.name} | ${SITE_NAME}`;
     const description = `مشاهده ${listingCount} ${category.nameFa} ایرانی در ${country.name} - ${SITE_NAME}`;
+    const breadcrumbs: BreadcrumbItem[] = [
+      { label: SITE_NAME, href: '/' },
+      { label: country.name, href: `/browse/${req.params.countryCode}` },
+      { label: category.nameFa },
+    ];
     const bodyHtml = renderBrowseBody({
       h1: `${category.nameFa} ایرانی در ${country.name}`,
       intro: `لیست کامل ${category.nameFa} ایرانی در ${country.name}. اطلاعات تماس، آدرس و توضیحات هر کسب‌وکار.`,
       listings,
       totalCount: listingCount,
+      breadcrumbs,
+      navSections: [
+        ...(cityLinks.length > 0 ? [{ heading: `${category.nameFa} در شهرهای ${country.name}`, links: cityLinks }] : []),
+        ...(otherCategoryLinks.length > 0 ? [{ heading: `سایر دسته‌بندی‌ها در ${country.name}`, links: otherCategoryLinks }] : []),
+      ],
     });
 
     return res.json({
@@ -328,15 +563,18 @@ router.get('/browse/:countryCode/category/:categorySlug', async (req: Request, r
       url,
       type: 'CollectionPage',
       bodyHtml,
-      jsonLd: {
-        '@context': 'https://schema.org',
-        '@type': 'CollectionPage',
-        name: title,
-        description,
-        url,
-        numberOfItems: listingCount,
-        isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL },
-      },
+      jsonLd: [
+        {
+          '@context': 'https://schema.org',
+          '@type': 'CollectionPage',
+          name: title,
+          description,
+          url,
+          numberOfItems: listingCount,
+          isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL },
+        },
+        breadcrumbJsonLd(breadcrumbs.map((b, i) => ({ ...b, href: i === breadcrumbs.length - 1 ? url : b.href }))),
+      ],
     });
   } catch (error) {
     console.error('Meta API error:', error);
@@ -371,14 +609,38 @@ router.get('/browse/:countryCode/:citySlug/:categorySlug', async (req: Request, 
       }),
     ]);
 
+    const allCategories = await prisma.category.findMany({
+      where: { id: { not: category.id } },
+      select: { slug: true, nameFa: true },
+      take: 9,
+    });
+    const otherCategoryLinks: NavLink[] = allCategories.map((c) => ({
+      label: `${c.nameFa} در ${city.nameFa}`,
+      href: `/browse/${req.params.countryCode}/${req.params.citySlug}/${c.slug}`,
+    }));
+
     const url = `${SITE_URL}/browse/${req.params.countryCode}/${req.params.citySlug}/${req.params.categorySlug}`;
     const title = `${category.nameFa} ایرانی در ${city.nameFa}, ${country.name} | ${SITE_NAME}`;
     const description = `مشاهده ${listingCount} ${category.nameFa} ایرانی در ${city.nameFa} - ${SITE_NAME}`;
+    const breadcrumbs: BreadcrumbItem[] = [
+      { label: SITE_NAME, href: '/' },
+      { label: country.name, href: `/browse/${req.params.countryCode}` },
+      { label: city.nameFa, href: `/browse/${req.params.countryCode}/${req.params.citySlug}` },
+      { label: category.nameFa },
+    ];
     const bodyHtml = renderBrowseBody({
       h1: `${category.nameFa} ایرانی در ${city.nameFa}`,
       intro: `لیست ${category.nameFa} ایرانی در شهر ${city.nameFa}، ${country.name}.`,
       listings,
       totalCount: listingCount,
+      breadcrumbs,
+      navSections: [
+        { heading: `سایر کسب‌وکارهای ایرانی در ${city.nameFa}`, links: [
+          { label: `همه کسب‌وکارهای ایرانی در ${city.nameFa}`, href: `/browse/${req.params.countryCode}/${req.params.citySlug}` },
+          { label: `همه ${category.nameFa} ایرانی در ${country.name}`, href: `/browse/${req.params.countryCode}/category/${req.params.categorySlug}` },
+        ]},
+        ...(otherCategoryLinks.length > 0 ? [{ heading: `سایر دسته‌بندی‌ها در ${city.nameFa}`, links: otherCategoryLinks }] : []),
+      ],
     });
 
     return res.json({
@@ -388,15 +650,18 @@ router.get('/browse/:countryCode/:citySlug/:categorySlug', async (req: Request, 
       url,
       type: 'CollectionPage',
       bodyHtml,
-      jsonLd: {
-        '@context': 'https://schema.org',
-        '@type': 'CollectionPage',
-        name: title,
-        description,
-        url,
-        numberOfItems: listingCount,
-        isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL },
-      },
+      jsonLd: [
+        {
+          '@context': 'https://schema.org',
+          '@type': 'CollectionPage',
+          name: title,
+          description,
+          url,
+          numberOfItems: listingCount,
+          isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL },
+        },
+        breadcrumbJsonLd(breadcrumbs.map((b, i) => ({ ...b, href: i === breadcrumbs.length - 1 ? url : b.href }))),
+      ],
     });
   } catch (error) {
     console.error('Meta API error:', error);
@@ -417,7 +682,7 @@ router.get('/browse/:countryCode/:citySlug', async (req: Request, res: Response)
       city: { contains: city.nameFa, mode: 'insensitive' as const },
       isActive: true,
     };
-    const [listingCount, listings] = await Promise.all([
+    const [listingCount, listings, categoriesInCity] = await Promise.all([
       prisma.listing.count({ where }),
       prisma.listing.findMany({
         where,
@@ -425,16 +690,45 @@ router.get('/browse/:countryCode/:citySlug', async (req: Request, res: Response)
         orderBy: { updatedAt: 'desc' },
         take: BROWSE_PAGE_SIZE,
       }),
+      prisma.listing.groupBy({
+        by: ['categoryId'],
+        where,
+        _count: { categoryId: true },
+        orderBy: { _count: { categoryId: 'desc' } },
+        take: 12,
+      }),
     ]);
+
+    const categoryRecords = await prisma.category.findMany({
+      where: { id: { in: categoriesInCity.map((c) => c.categoryId) } },
+      select: { id: true, slug: true, nameFa: true },
+    });
+    const catCountMap = new Map(categoriesInCity.map((c) => [c.categoryId, c._count.categoryId]));
+    const categoryLinks: NavLink[] = categoryRecords.map((c) => ({
+      label: `${c.nameFa} در ${city.nameFa} (${catCountMap.get(c.id) || 0})`,
+      href: `/browse/${req.params.countryCode}/${req.params.citySlug}/${c.slug}`,
+    }));
 
     const url = `${SITE_URL}/browse/${req.params.countryCode}/${req.params.citySlug}`;
     const title = `کسب‌وکارهای ایرانی در ${city.nameFa}, ${country.name} | ${SITE_NAME}`;
     const description = `مشاهده ${listingCount} کسب‌وکار ایرانی در ${city.nameFa} - ${SITE_NAME}`;
+    const breadcrumbs: BreadcrumbItem[] = [
+      { label: SITE_NAME, href: '/' },
+      { label: country.name, href: `/browse/${req.params.countryCode}` },
+      { label: city.nameFa },
+    ];
     const bodyHtml = renderBrowseBody({
       h1: `کسب‌وکارهای ایرانی در ${city.nameFa}`,
       intro: `راهنمای کسب‌وکارهای ایرانی در شهر ${city.nameFa}، ${country.name}.`,
       listings,
       totalCount: listingCount,
+      breadcrumbs,
+      navSections: [
+        ...(categoryLinks.length > 0 ? [{ heading: `دسته‌بندی‌ها در ${city.nameFa}`, links: categoryLinks }] : []),
+        { heading: `کاوش بیشتر`, links: [
+          { label: `همه کسب‌وکارهای ایرانی در ${country.name}`, href: `/browse/${req.params.countryCode}` },
+        ]},
+      ],
     });
 
     return res.json({
@@ -444,14 +738,17 @@ router.get('/browse/:countryCode/:citySlug', async (req: Request, res: Response)
       url,
       type: 'CollectionPage',
       bodyHtml,
-      jsonLd: {
-        '@context': 'https://schema.org',
-        '@type': 'CollectionPage',
-        name: title,
-        description,
-        url,
-        isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL },
-      },
+      jsonLd: [
+        {
+          '@context': 'https://schema.org',
+          '@type': 'CollectionPage',
+          name: title,
+          description,
+          url,
+          isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL },
+        },
+        breadcrumbJsonLd(breadcrumbs.map((b, i) => ({ ...b, href: i === breadcrumbs.length - 1 ? url : b.href }))),
+      ],
     });
   } catch (error) {
     console.error('Meta API error:', error);
@@ -486,7 +783,55 @@ router.get('/:type/:id', async (req: Request, res: Response) => {
         ? listing.description.substring(0, 160)
         : `${listing.title} - ${listing.category.nameFa} در ${listing.city}`;
 
-      const bodyHtml = renderListingBody(listing);
+      const related = await prisma.listing.findMany({
+        where: {
+          id: { not: listing.id },
+          categoryId: listing.categoryId,
+          city: listing.city,
+          isActive: true,
+        },
+        select: { id: true, slug: true, title: true, description: true, city: true, category: { select: { nameFa: true } } },
+        orderBy: { updatedAt: 'desc' },
+        take: RELATED_LIMIT,
+      });
+
+      const countryCode = countryCodeFromFa(listing.country);
+      const citySlug = citySlugFromFa(listing.city);
+      const breadcrumbs: BreadcrumbItem[] = [
+        { label: SITE_NAME, href: '/' },
+        ...(countryCode ? [{ label: listing.country, href: `/browse/${countryCode}` }] : []),
+        ...(countryCode && citySlug ? [{ label: listing.city, href: `/browse/${countryCode}/${citySlug}` }] : []),
+        { label: listing.title },
+      ];
+
+      const exploreLinks: NavLink[] = [];
+      if (countryCode && citySlug) {
+        exploreLinks.push({
+          label: `همه ${listing.category.nameFa} ایرانی در ${listing.city}`,
+          href: `/browse/${countryCode}/${citySlug}/${listing.category.slug}`,
+        });
+        exploreLinks.push({
+          label: `همه کسب‌وکارهای ایرانی در ${listing.city}`,
+          href: `/browse/${countryCode}/${citySlug}`,
+        });
+      }
+      if (countryCode) {
+        exploreLinks.push({
+          label: `همه ${listing.category.nameFa} ایرانی در ${listing.country}`,
+          href: `/browse/${countryCode}/category/${listing.category.slug}`,
+        });
+        exploreLinks.push({
+          label: `همه کسب‌وکارهای ایرانی در ${listing.country}`,
+          href: `/browse/${countryCode}`,
+        });
+      }
+
+      const bodyHtml = renderListingBody({
+        listing,
+        related,
+        breadcrumbs,
+        exploreLinks,
+      });
 
       return res.json({
         title: `${listing.title} | ${SITE_NAME}`,
@@ -495,29 +840,32 @@ router.get('/:type/:id', async (req: Request, res: Response) => {
         url,
         type: 'LocalBusiness',
         bodyHtml,
-        jsonLd: {
-          '@context': 'https://schema.org',
-          '@type': 'LocalBusiness',
-          name: listing.title,
-          description: listing.description,
-          image,
-          url,
-          address: {
-            '@type': 'PostalAddress',
-            streetAddress: listing.address,
-            addressLocality: listing.city,
-            addressCountry: listing.country,
-          },
-          ...(listing.phone && { telephone: listing.phone }),
-          ...(listing.latitude && listing.longitude && {
-            geo: {
-              '@type': 'GeoCoordinates',
-              latitude: listing.latitude,
-              longitude: listing.longitude,
+        jsonLd: [
+          {
+            '@context': 'https://schema.org',
+            '@type': 'LocalBusiness',
+            name: listing.title,
+            description: listing.description,
+            image,
+            url,
+            address: {
+              '@type': 'PostalAddress',
+              streetAddress: listing.address,
+              addressLocality: listing.city,
+              addressCountry: listing.country,
             },
-          }),
-          ...(listing.website && { sameAs: listing.website }),
-        },
+            ...(listing.phone && { telephone: listing.phone }),
+            ...(listing.latitude && listing.longitude && {
+              geo: {
+                '@type': 'GeoCoordinates',
+                latitude: listing.latitude,
+                longitude: listing.longitude,
+              },
+            }),
+            ...(listing.website && { sameAs: listing.website }),
+          },
+          breadcrumbJsonLd(breadcrumbs.map((b, i) => ({ ...b, href: i === breadcrumbs.length - 1 ? url : b.href }))),
+        ],
       });
     }
 
