@@ -20,8 +20,21 @@ const PORT = process.env.PORT || 5000;
 app.set('trust proxy', 1);
 
 // Middleware
+const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+const allowedOrigins = new Set<string>([clientUrl]);
+try {
+  const u = new URL(clientUrl);
+  if (u.hostname.startsWith('www.')) {
+    allowedOrigins.add(`${u.protocol}//${u.hostname.slice(4)}`);
+  } else if (!u.hostname.includes('localhost')) {
+    allowedOrigins.add(`${u.protocol}//www.${u.hostname}`);
+  }
+} catch {}
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+    return callback(new Error(`CORS blocked: ${origin}`));
+  },
   credentials: true,
 }));
 app.use(express.json());
