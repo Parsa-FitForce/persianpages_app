@@ -10,4 +10,4 @@ Disallow: /forgot-password
 Disallow: /reset-password
 Disallow: /verify-email
 
-Sitemap: https://api.persianpages.com/api/sitemap.xml
+Sitemap: https://persianpages.com/sitemap.xml

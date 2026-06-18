@@ -54,6 +54,19 @@ resource "aws_cloudfront_distribution" "frontend" {
     origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
   }
 
+  origin {
+    domain_name = "api.${var.domain_name}"
+    origin_id   = "API-sitemaps"
+    origin_path = "/api"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD"]
@@ -61,7 +74,6 @@ resource "aws_cloudfront_distribution" "frontend" {
 
     forwarded_values {
       query_string = false
-      headers      = ["User-Agent"]
       cookies {
         forward = "none"
       }
@@ -82,6 +94,58 @@ resource "aws_cloudfront_distribution" "frontend" {
     min_ttl                = 0
     default_ttl            = 3600
     max_ttl                = 86400
+    compress               = true
+  }
+
+  # The edge renderer fetches this unmodified shell to build public HTML.
+  ordered_cache_behavior {
+    path_pattern     = "/index.html"
+    allowed_methods  = ["GET", "HEAD"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "S3-${aws_s3_bucket.frontend.id}"
+
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
+      }
+    }
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.www_redirect.arn
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 3600
+    max_ttl                = 86400
+    compress               = true
+  }
+
+  # Keep all sitemap URLs on the canonical host while generating them dynamically.
+  ordered_cache_behavior {
+    path_pattern     = "/sitemap*.xml"
+    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "API-sitemaps"
+
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
+      }
+    }
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.www_redirect.arn
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 3600
+    max_ttl                = 3600
     compress               = true
   }
 
@@ -111,19 +175,6 @@ resource "aws_cloudfront_distribution" "frontend" {
     compress               = true
   }
 
-  # SPA routing - redirect 404s to index.html
-  custom_error_response {
-    error_code         = 403
-    response_code      = 200
-    response_page_path = "/index.html"
-  }
-
-  custom_error_response {
-    error_code         = 404
-    response_code      = 200
-    response_page_path = "/index.html"
-  }
-
   restrictions {
     geo_restriction {
       restriction_type = "none"
@@ -131,10 +182,10 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   viewer_certificate {
-    acm_certificate_arn      = var.domain_name != "" ? aws_acm_certificate_validation.frontend.certificate_arn : null
+    acm_certificate_arn            = var.domain_name != "" ? aws_acm_certificate_validation.frontend.certificate_arn : null
     cloudfront_default_certificate = var.domain_name == "" ? true : false
-    ssl_support_method       = var.domain_name != "" ? "sni-only" : null
-    minimum_protocol_version = var.domain_name != "" ? "TLSv1.2_2021" : null
+    ssl_support_method             = var.domain_name != "" ? "sni-only" : null
+    minimum_protocol_version       = var.domain_name != "" ? "TLSv1.2_2021" : null
   }
 
   tags = {

@@ -1,14 +1,9 @@
 import https from 'https';
 
-const BOT_UA_PATTERN = /googlebot|google-inspectiontool|adsbot-google|mediapartners-google|storebot-google|googleother|bingbot|yandex|baiduspider|facebookexternalhit|twitterbot|linkedinbot|slackbot|whatsapp|telegrambot|applebot|duckduckbot|seznambot|pinterestbot/i;
-
-// Each entry returns a distinct metaPath so no two routes dedupe.
 // Ordering matters: more-specific patterns must come before generic ones.
 const ROUTE_PATTERNS = [
   { pattern: /^\/listing\/([^/]+)\/?$/,
     build: (m) => ({ type: 'listing', metaPath: `/api/meta/listing/${m[1]}` }) },
-  { pattern: /^\/category\/([^/]+)\/?$/,
-    build: (m) => ({ type: 'category', metaPath: `/api/meta/category/${m[1]}` }) },
   { pattern: /^\/browse\/([a-z]{2})\/category\/([^/]+)\/?$/,
     build: (m) => ({ type: 'browse-country-category', metaPath: `/api/meta/browse/${m[1]}/category/${m[2]}` }) },
   { pattern: /^\/browse\/([a-z]{2})\/([^/]+)\/([^/]+)\/?$/,
@@ -20,6 +15,13 @@ const ROUTE_PATTERNS = [
 ];
 
 const STATIC_PAGES = {
+  '/select-country': {
+    title: 'انتخاب کشور | PersianPages',
+    description: 'کشور خود را انتخاب کنید و کسب‌وکارهای ایرانی نزدیک خود را پیدا کنید.',
+    url: 'https://persianpages.com/select-country',
+    type: 'website',
+    bodyHtml: '<main><h1>انتخاب کشور</h1><p>کشور مورد نظر را برای مشاهده شهرها و کسب‌وکارهای ایرانی انتخاب کنید.</p><p><a href="/">بازگشت به صفحه اصلی</a></p></main>',
+  },
   '/terms': {
     title: 'Terms & Conditions | شرایط استفاده | PersianPages',
     description: 'PersianPages terms and conditions of use.',
@@ -36,6 +38,30 @@ const STATIC_PAGES = {
   },
 };
 
+const NOINDEX_PATTERNS = [
+  /^\/search\/?$/,
+  /^\/login\/?$/,
+  /^\/register\/?$/,
+  /^\/auth\/callback\/?$/,
+  /^\/forgot-password\/?$/,
+  /^\/reset-password\/?$/,
+  /^\/verify-email\/?$/,
+  /^\/dashboard\/?$/,
+  /^\/settings\/?$/,
+  /^\/listings\/new\/?$/,
+  /^\/listings\/[^/]+\/edit\/?$/,
+];
+
+const NOT_FOUND_META = {
+  title: 'صفحه یافت نشد | PersianPages',
+  description: 'صفحه مورد نظر پیدا نشد.',
+  url: 'https://persianpages.com/404',
+  type: 'website',
+  noindex: true,
+  statusCode: 404,
+  bodyHtml: '<main><h1>صفحه یافت نشد</h1><p><a href="/">بازگشت به صفحه اصلی</a></p></main>',
+};
+
 function parseRoute(uri) {
   for (const route of ROUTE_PATTERNS) {
     const match = uri.match(route.pattern);
@@ -44,26 +70,17 @@ function parseRoute(uri) {
     }
   }
   if (uri === '/' || uri === '/index.html') {
-    return { type: 'home' };
+    return { type: 'home', metaPath: '/api/meta/home' };
   }
   // Strip trailing slash for static-page lookup
   const normalized = uri.length > 1 && uri.endsWith('/') ? uri.slice(0, -1) : uri;
   if (STATIC_PAGES[normalized]) {
     return { type: 'static', staticPath: normalized };
   }
-  return null;
-}
-
-function getHeader(request, name) {
-  const header = request.headers[name.toLowerCase()];
-  if (header && header.length > 0) {
-    return header[0].value;
+  if (NOINDEX_PATTERNS.some((pattern) => pattern.test(normalized))) {
+    return { type: 'noindex', staticPath: normalized };
   }
-  return '';
-}
-
-function isBot(ua) {
-  return BOT_UA_PATTERN.test(ua);
+  return null;
 }
 
 function isHtmlResponse(response) {
@@ -90,7 +107,11 @@ function fetchJson(hostname, path) {
       res.on('data', (chunk) => { body += chunk; });
       res.on('end', () => {
         try {
-          resolve(JSON.parse(body));
+          const parsed = JSON.parse(body);
+          resolve({
+            ...parsed,
+            statusCode: parsed.statusCode || res.statusCode,
+          });
         } catch {
           resolve(null);
         }
@@ -208,56 +229,34 @@ function injectMeta(html, data) {
   return html;
 }
 
-const HOMEPAGE_META = {
-  title: 'PersianPages | دایرکتوری مشاغل ایرانی',
-  description: 'دایرکتوری آنلاین مشاغل ایرانی در کانادا - رستوران، پزشک، وکیل، املاک و خدمات ایرانی',
-  image: 'https://persianpages.com/og-default.png',
-  url: 'https://persianpages.com',
-  type: 'website',
-  jsonLd: {
-    '@context': 'https://schema.org',
-    '@type': 'WebSite',
-    name: 'PersianPages',
-    url: 'https://persianpages.com',
-    description: 'دایرکتوری آنلاین مشاغل ایرانی در کانادا',
-  },
-};
-
 export async function handler(event) {
   const response = event.Records[0].cf.response;
   const request = event.Records[0].cf.request;
 
-  // Parse the URI to determine page type
-  const route = parseRoute(request.uri);
-  if (!route) {
-    return response;
-  }
-
-  // Check if it's a bot (User-Agent is forwarded via CloudFront config)
-  const ua = getHeader(request, 'user-agent');
-  if (!isBot(ua)) {
-    return response;
-  }
-
-  // For SPA routes, S3 returns 403/404 because the path doesn't exist as a file.
-  // CloudFront's custom_error_response would normally handle this, but Lambda@Edge
-  // origin-response runs BEFORE custom error pages are applied.
-  // So we need to handle both cases:
-  //   - 200 with HTML body (direct hit on index.html or /)
-  //   - 403/404 from S3 (SPA route like /listing/abc123)
   const isSpaFallback = response.status === '403' || response.status === '404';
   const isDirectHtml = response.status === '200' && isHtmlResponse(response);
-
   if (!isSpaFallback && !isDirectHtml) {
     return response;
   }
 
-  // Fetch meta data
+  const route = parseRoute(request.uri);
+
   let data;
-  if (route.type === 'home') {
-    data = HOMEPAGE_META;
+  if (!route) {
+    data = {
+      ...NOT_FOUND_META,
+      url: `https://persianpages.com${request.uri}`,
+    };
   } else if (route.type === 'static') {
     data = STATIC_PAGES[route.staticPath];
+  } else if (route.type === 'noindex') {
+    data = {
+      title: `PersianPages`,
+      description: 'PersianPages',
+      url: `https://persianpages.com${route.staticPath}`,
+      type: 'website',
+      noindex: true,
+    };
   } else {
     data = await fetchJson('api.persianpages.com', route.metaPath);
   }
@@ -266,28 +265,23 @@ export async function handler(event) {
     return response;
   }
 
-  // Get the HTML body — either from the response (200) or fetch index.html
-  let html;
-  if (isDirectHtml && response.body) {
-    html = response.body;
-  } else if (isSpaFallback) {
-    // Fetch index.html through CloudFront itself (S3 is private/OAC-only)
-    html = await fetchHtml('persianpages.com', '/index.html');
-    if (!html) {
-      return response;
-    }
-  } else {
+  // Fetch the immutable app shell from the dedicated /index.html cache behavior.
+  const html = await fetchHtml('persianpages.com', '/index.html');
+  if (!html) {
     return response;
   }
 
-  // Inject meta tags and return enriched HTML
   const enrichedHtml = injectMeta(html, data);
 
-  response.status = '200';
-  response.statusDescription = 'OK';
+  const statusCode = Number(data.statusCode) || 200;
+  response.status = String(statusCode);
+  response.statusDescription = statusCode === 404 ? 'Not Found' : 'OK';
   response.body = enrichedHtml;
   response.headers['content-type'] = [{ key: 'Content-Type', value: 'text/html; charset=utf-8' }];
-  // Remove content-length since body size changed
+  response.headers['cache-control'] = [{
+    key: 'Cache-Control',
+    value: data.noindex ? 'public, max-age=300' : 'public, max-age=3600',
+  }];
   delete response.headers['content-length'];
 
   return response;

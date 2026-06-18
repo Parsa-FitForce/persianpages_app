@@ -29,14 +29,28 @@ export default function BrowsePage() {
   const isCategoryRoute = citySlug === 'category';
   const resolvedCity = isCategoryRoute ? undefined : city;
   const resolvedCategorySlug = isCategoryRoute ? categorySlug : categorySlug;
+  const invalidLocation = !country || Boolean(citySlug && !isCategoryRoute && !city);
 
   useEffect(() => {
     categoriesApi.getAll().then((res) => setCategories(res.data));
   }, []);
 
   const selectedCategory = categories.find(c => c.slug === resolvedCategorySlug);
+  const invalidCategory = Boolean(
+    resolvedCategorySlug
+      && categories.length > 0
+      && !selectedCategory
+  );
 
   useEffect(() => {
+    if (invalidLocation) {
+      setListings([]);
+      setTotal(0);
+      setPages(1);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     listingsApi
       .getAll({
@@ -52,7 +66,7 @@ export default function BrowsePage() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [resolvedCategorySlug, resolvedCity?.name, country?.name, page]);
+  }, [resolvedCategorySlug, resolvedCity?.name, country?.name, page, invalidLocation]);
 
   // Build SEO meta
   const SITE_URL = 'https://persianpages.com';
@@ -92,6 +106,23 @@ export default function BrowsePage() {
       ? `${selectedCategory.nameFa} در ${country?.name || ''}`
       : country?.name || '';
 
+  if (invalidLocation || invalidCategory) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center px-4">
+        <Helmet>
+          <title>صفحه یافت نشد | پرشین‌پیجز</title>
+          <meta name="robots" content="noindex, follow" />
+        </Helmet>
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">صفحه یافت نشد</h1>
+          <Link to="/" className="text-primary-700 hover:underline">
+            بازگشت به صفحه اصلی
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen">
       <Helmet>
@@ -103,6 +134,9 @@ export default function BrowsePage() {
         <meta property="og:url" content={canonicalUrl} />
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="PersianPages" />
+        {!loading && total < 3 ? (
+          <meta name="robots" content="noindex, follow" />
+        ) : null}
         <script type="application/ld+json">
           {JSON.stringify(getCollectionPageSchema({
             name: pageTitle,

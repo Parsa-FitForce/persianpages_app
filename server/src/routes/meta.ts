@@ -1,5 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import {
+  findCanonicalListing,
+  isSeoEligibleBrowseSource,
+  isSeoEligibleListing,
+  selectCanonicalListings,
+} from '../utils/seo.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -161,12 +167,8 @@ const CITIES_BY_SLUG: Record<string, { nameFa: string; nameEn: string }> = {
   'penang': { nameFa: 'پنانگ', nameEn: 'Penang' },
 };
 
-function resolveCity(slug: string): { nameFa: string; nameEn: string } {
-  const hit = CITIES_BY_SLUG[slug];
-  if (hit) return hit;
-  // Unknown slug: reverse the slug into a display name and use it for both.
-  const nameEn = slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  return { nameFa: nameEn, nameEn };
+function resolveCity(slug: string): { nameFa: string; nameEn: string } | null {
+  return CITIES_BY_SLUG[slug] || null;
 }
 
 const COUNTRY_FA_TO_CODE: Record<string, string> = Object.fromEntries(
@@ -177,11 +179,11 @@ const CITY_FA_TO_SLUG: Record<string, string> = Object.fromEntries(
   Object.entries(CITIES_BY_SLUG).map(([slug, { nameFa }]) => [nameFa, slug])
 );
 
-function countryCodeFromFa(name: string): string | null {
+export function countryCodeFromFa(name: string): string | null {
   return COUNTRY_FA_TO_CODE[name] || null;
 }
 
-function citySlugFromFa(name: string): string | null {
+export function citySlugFromFa(name: string): string | null {
   return CITY_FA_TO_SLUG[name] || null;
 }
 
@@ -348,11 +350,10 @@ function renderListingBody(opts: {
     businessHours: unknown;
     category: { nameFa: string };
   };
-  related: BrowseListing[];
   breadcrumbs: BreadcrumbItem[];
   exploreLinks: NavLink[];
 }): string {
-  const { listing, related, breadcrumbs, exploreLinks } = opts;
+  const { listing, breadcrumbs, exploreLinks } = opts;
   const parts: string[] = [];
   parts.push(renderBreadcrumbs(breadcrumbs));
   parts.push(`<h1>${esc(listing.title)}</h1>`);
@@ -370,15 +371,14 @@ function renderListingBody(opts: {
   parts.push(`<section><h2>اطلاعات تماس</h2>${contactBits.join('')}</section>`);
   parts.push(renderBusinessHours(listing.businessHours));
   parts.push(renderSocialLinks(listing.socialLinks));
-  parts.push(renderRelatedListings(`${listing.category.nameFa}های دیگر در ${listing.city}`, related));
   if (exploreLinks.length > 0) {
     parts.push(renderNavLinks('کاوش بیشتر', exploreLinks));
   }
   return `<main>${parts.filter(Boolean).join('')}</main>`;
 }
 
-const BROWSE_PAGE_SIZE = 100;
-const RELATED_LIMIT = 8;
+const BROWSE_PAGE_SIZE = 12;
+const MIN_INDEXABLE_BROWSE_RESULTS = 3;
 
 const FALLBACK_META = {
   title: `${SITE_NAME} | دایرکتوری مشاغل ایرانی`,
@@ -386,6 +386,7 @@ const FALLBACK_META = {
   image: DEFAULT_IMAGE,
   url: SITE_URL,
   type: 'website',
+  noindex: true,
   jsonLd: {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
@@ -395,11 +396,100 @@ const FALLBACK_META = {
   },
 };
 
+function notFoundMeta(path: string) {
+  return {
+    title: `صفحه یافت نشد | ${SITE_NAME}`,
+    description: 'صفحه مورد نظر پیدا نشد.',
+    image: DEFAULT_IMAGE,
+    url: `${SITE_URL}${path}`,
+    type: 'website',
+    noindex: true,
+    statusCode: 404,
+    bodyHtml: '<main><h1>صفحه یافت نشد</h1><p><a href="/">بازگشت به صفحه اصلی</a></p></main>',
+  };
+}
+
+router.get('/home', async (_req: Request, res: Response) => {
+  try {
+    const listings = await prisma.listing.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        description: true,
+        address: true,
+        city: true,
+        country: true,
+        phone: true,
+        website: true,
+        placeId: true,
+        photos: true,
+        isActive: true,
+        isClaimed: true,
+        phoneVerified: true,
+        source: true,
+        updatedAt: true,
+        category: { select: { nameFa: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+    const canonicalListings = selectCanonicalListings(
+      listings,
+      isSeoEligibleBrowseSource
+    );
+    const recentListings = canonicalListings.slice(0, 6);
+    const countryCounts = new Map<string, number>();
+    for (const listing of canonicalListings) {
+      countryCounts.set(listing.country, (countryCounts.get(listing.country) || 0) + 1);
+    }
+    const countryLinks = [...countryCounts.entries()]
+      .map(([country, count]) => {
+        const code = countryCodeFromFa(country);
+        return code ? { label: `${country} (${count})`, href: `/browse/${code}` } : null;
+      })
+      .filter((link): link is NavLink => link !== null)
+      .sort((a, b) => Number(b.label.match(/\((\d+)\)/)?.[1] || 0) - Number(a.label.match(/\((\d+)\)/)?.[1] || 0))
+      .slice(0, 10);
+
+    const title = 'پرشین‌پیجز - راهنمای کسب‌وکارهای ایرانی در سراسر جهان';
+    const description = 'راهنمای جامع کسب‌وکارهای ایرانی در سراسر جهان. رستوران، پزشک، وکیل، سوپرمارکت و خدمات ایرانی را پیدا کنید.';
+    const bodyHtml = renderBrowseBody({
+      h1: 'راهنمای کسب‌وکارهای ایرانی در سراسر جهان',
+      intro: description,
+      listings: recentListings,
+      totalCount: canonicalListings.length,
+      navSections: [{ heading: 'کشورهای پربازدید', links: countryLinks }],
+    });
+
+    res.json({
+      title,
+      description,
+      image: DEFAULT_IMAGE,
+      url: `${SITE_URL}/`,
+      type: 'website',
+      bodyHtml,
+      jsonLd: {
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        name: SITE_NAME,
+        url: SITE_URL,
+        description,
+      },
+    });
+  } catch (error) {
+    console.error('Homepage meta error:', error);
+    res.status(503).json(FALLBACK_META);
+  }
+});
+
 // Browse: country page meta
 router.get('/browse/:countryCode', async (req: Request, res: Response) => {
   try {
     const country = COUNTRY_NAMES[req.params.countryCode];
-    if (!country) return res.json(FALLBACK_META);
+    if (!country) {
+      return res.status(404).json(notFoundMeta(`/browse/${req.params.countryCode}`));
+    }
 
     const where = { country: country.name, isActive: true };
     const [listingCount, listings, categoriesInCountry, citiesAgg] = await Promise.all([
@@ -470,6 +560,7 @@ router.get('/browse/:countryCode', async (req: Request, res: Response) => {
       image: DEFAULT_IMAGE,
       url,
       type: 'CollectionPage',
+      noindex: listingCount < MIN_INDEXABLE_BROWSE_RESULTS,
       bodyHtml,
       jsonLd: [
         {
@@ -493,10 +584,14 @@ router.get('/browse/:countryCode', async (req: Request, res: Response) => {
 router.get('/browse/:countryCode/category/:categorySlug', async (req: Request, res: Response) => {
   try {
     const country = COUNTRY_NAMES[req.params.countryCode];
-    if (!country) return res.json(FALLBACK_META);
+    if (!country) {
+      return res.status(404).json(notFoundMeta(`/browse/${req.params.countryCode}/category/${req.params.categorySlug}`));
+    }
 
     const category = await prisma.category.findUnique({ where: { slug: req.params.categorySlug } });
-    if (!category) return res.json(FALLBACK_META);
+    if (!category) {
+      return res.status(404).json(notFoundMeta(`/browse/${req.params.countryCode}/category/${req.params.categorySlug}`));
+    }
 
     const where = { country: country.name, categoryId: category.id, isActive: true };
     const [listingCount, listings, citiesAgg] = await Promise.all([
@@ -562,6 +657,7 @@ router.get('/browse/:countryCode/category/:categorySlug', async (req: Request, r
       image: DEFAULT_IMAGE,
       url,
       type: 'CollectionPage',
+      noindex: listingCount < MIN_INDEXABLE_BROWSE_RESULTS,
       bodyHtml,
       jsonLd: [
         {
@@ -586,12 +682,19 @@ router.get('/browse/:countryCode/category/:categorySlug', async (req: Request, r
 router.get('/browse/:countryCode/:citySlug/:categorySlug', async (req: Request, res: Response) => {
   try {
     const country = COUNTRY_NAMES[req.params.countryCode];
-    if (!country) return res.json(FALLBACK_META);
+    if (!country) {
+      return res.status(404).json(notFoundMeta(req.path.replace('/api/meta', '')));
+    }
 
     const category = await prisma.category.findUnique({ where: { slug: req.params.categorySlug } });
-    if (!category) return res.json(FALLBACK_META);
+    if (!category) {
+      return res.status(404).json(notFoundMeta(req.path.replace('/api/meta', '')));
+    }
 
     const city = resolveCity(req.params.citySlug);
+    if (!city) {
+      return res.status(404).json(notFoundMeta(req.path.replace('/api/meta', '')));
+    }
 
     const where = {
       country: country.name,
@@ -649,6 +752,7 @@ router.get('/browse/:countryCode/:citySlug/:categorySlug', async (req: Request, 
       image: DEFAULT_IMAGE,
       url,
       type: 'CollectionPage',
+      noindex: listingCount < MIN_INDEXABLE_BROWSE_RESULTS,
       bodyHtml,
       jsonLd: [
         {
@@ -673,9 +777,14 @@ router.get('/browse/:countryCode/:citySlug/:categorySlug', async (req: Request, 
 router.get('/browse/:countryCode/:citySlug', async (req: Request, res: Response) => {
   try {
     const country = COUNTRY_NAMES[req.params.countryCode];
-    if (!country) return res.json(FALLBACK_META);
+    if (!country) {
+      return res.status(404).json(notFoundMeta(req.path.replace('/api/meta', '')));
+    }
 
     const city = resolveCity(req.params.citySlug);
+    if (!city) {
+      return res.status(404).json(notFoundMeta(req.path.replace('/api/meta', '')));
+    }
 
     const where = {
       country: country.name,
@@ -737,6 +846,7 @@ router.get('/browse/:countryCode/:citySlug', async (req: Request, res: Response)
       image: DEFAULT_IMAGE,
       url,
       type: 'CollectionPage',
+      noindex: listingCount < MIN_INDEXABLE_BROWSE_RESULTS,
       bodyHtml,
       jsonLd: [
         {
@@ -774,26 +884,32 @@ router.get('/:type/:id', async (req: Request, res: Response) => {
       }
 
       if (!listing) {
-        return res.json(FALLBACK_META);
+        return res.status(404).json(notFoundMeta(`/listing/${id}`));
       }
 
-      const url = `${SITE_URL}/listing/${listing.slug || listing.id}`;
+      if (!listing.isActive) {
+        return res.status(404).json(notFoundMeta(`/listing/${id}`));
+      }
+
+      const duplicateCandidates = await prisma.listing.findMany({
+        where: {
+          isActive: true,
+          OR: [
+            ...(listing.placeId ? [{ placeId: listing.placeId }] : []),
+            { address: listing.address, city: listing.city, country: listing.country },
+          ],
+        },
+        include: { category: true },
+      });
+      const canonicalListing = findCanonicalListing(listing, duplicateCandidates);
+      const isIndexable = isSeoEligibleListing(listing)
+        && canonicalListing?.id === listing.id;
+      const canonicalTarget = canonicalListing || listing;
+      const url = `${SITE_URL}/listing/${canonicalTarget.slug || canonicalTarget.id}`;
       const image = listing.photos.length > 0 ? listing.photos[0] : DEFAULT_IMAGE;
       const description = listing.description
         ? listing.description.substring(0, 160)
         : `${listing.title} - ${listing.category.nameFa} در ${listing.city}`;
-
-      const related = await prisma.listing.findMany({
-        where: {
-          id: { not: listing.id },
-          categoryId: listing.categoryId,
-          city: listing.city,
-          isActive: true,
-        },
-        select: { id: true, slug: true, title: true, description: true, city: true, category: { select: { nameFa: true } } },
-        orderBy: { updatedAt: 'desc' },
-        take: RELATED_LIMIT,
-      });
 
       const countryCode = countryCodeFromFa(listing.country);
       const citySlug = citySlugFromFa(listing.city);
@@ -828,7 +944,6 @@ router.get('/:type/:id', async (req: Request, res: Response) => {
 
       const bodyHtml = renderListingBody({
         listing,
-        related,
         breadcrumbs,
         exploreLinks,
       });
@@ -839,6 +954,7 @@ router.get('/:type/:id', async (req: Request, res: Response) => {
         image,
         url,
         type: 'LocalBusiness',
+        noindex: !isIndexable,
         bodyHtml,
         jsonLd: [
           {

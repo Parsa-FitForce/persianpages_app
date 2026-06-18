@@ -1,5 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import {
+  isSeoEligibleBrowseSource,
+  selectCanonicalListings,
+} from '../utils/seo.js';
+import { citySlugFromFa, countryCodeFromFa } from './meta.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -143,15 +148,15 @@ router.get('/sitemap.xml', async (_req: Request, res: Response) => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap>
-    <loc>https://api.persianpages.com/api/sitemap-static.xml</loc>
+    <loc>${SITE_URL}/sitemap-static.xml</loc>
     <lastmod>${lastmod}</lastmod>
   </sitemap>
   <sitemap>
-    <loc>https://api.persianpages.com/api/sitemap-listings.xml</loc>
+    <loc>${SITE_URL}/sitemap-listings.xml</loc>
     <lastmod>${lastmod}</lastmod>
   </sitemap>
   <sitemap>
-    <loc>https://api.persianpages.com/api/sitemap-browse.xml</loc>
+    <loc>${SITE_URL}/sitemap-browse.xml</loc>
     <lastmod>${lastmod}</lastmod>
   </sitemap>
 </sitemapindex>`;
@@ -162,13 +167,13 @@ router.get('/sitemap.xml', async (_req: Request, res: Response) => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap>
-    <loc>https://api.persianpages.com/api/sitemap-static.xml</loc>
+    <loc>${SITE_URL}/sitemap-static.xml</loc>
   </sitemap>
   <sitemap>
-    <loc>https://api.persianpages.com/api/sitemap-listings.xml</loc>
+    <loc>${SITE_URL}/sitemap-listings.xml</loc>
   </sitemap>
   <sitemap>
-    <loc>https://api.persianpages.com/api/sitemap-browse.xml</loc>
+    <loc>${SITE_URL}/sitemap-browse.xml</loc>
   </sitemap>
 </sitemapindex>`;
     res.set('Content-Type', 'application/xml');
@@ -178,20 +183,13 @@ router.get('/sitemap.xml', async (_req: Request, res: Response) => {
 
 // Static pages sitemap — homepage + select-country
 router.get('/sitemap-static.xml', (_req: Request, res: Response) => {
-  const today = toDate(new Date());
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>${SITE_URL}/</loc>
-    <lastmod>${today}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>1.0</priority>
   </url>
   <url>
     <loc>${SITE_URL}/select-country</loc>
-    <lastmod>${today}</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
   </url>
 </urlset>`;
 
@@ -209,18 +207,33 @@ router.get('/sitemap-listings.xml', async (_req: Request, res: Response) => {
 
     const listings = await prisma.listing.findMany({
       where: { isActive: true },
-      select: { id: true, slug: true, updatedAt: true },
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        description: true,
+        address: true,
+        city: true,
+        country: true,
+        phone: true,
+        website: true,
+        placeId: true,
+        photos: true,
+        isActive: true,
+        isClaimed: true,
+        phoneVerified: true,
+        source: true,
+        updatedAt: true,
+      },
       orderBy: { updatedAt: 'desc' },
     });
 
-    const urls = listings
+    const urls = selectCanonicalListings(listings)
       .map(
         (listing) =>
           `  <url>
     <loc>${SITE_URL}/listing/${listing.slug || listing.id}</loc>
     <lastmod>${toDate(listing.updatedAt)}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
   </url>`
       )
       .join('\n');
@@ -248,67 +261,103 @@ router.get('/sitemap-browse.xml', async (_req: Request, res: Response) => {
       return res.send(browseSitemapCache.xml);
     }
 
-    const categories = await prisma.category.findMany({ select: { slug: true } });
-
-    // Get latest updatedAt per country (Persian name) in one query
-    const countryLastMods = await prisma.listing.groupBy({
-      by: ['country'],
+    const listings = await prisma.listing.findMany({
       where: { isActive: true },
-      _max: { updatedAt: true },
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        description: true,
+        address: true,
+        city: true,
+        country: true,
+        phone: true,
+        website: true,
+        placeId: true,
+        photos: true,
+        isActive: true,
+        isClaimed: true,
+        phoneVerified: true,
+        source: true,
+        updatedAt: true,
+        category: { select: { slug: true } },
+      },
     });
-    const countryLastModMap = new Map(
-      countryLastMods.map(r => [r.country, r._max.updatedAt])
+    const canonicalListings = selectCanonicalListings(
+      listings,
+      isSeoEligibleBrowseSource
     );
+    type PageStats = { count: number; updatedAt: Date };
+    const countryPages = new Map<string, PageStats>();
+    const countryCategoryPages = new Map<string, PageStats>();
+    const cityPages = new Map<string, PageStats>();
+    const cityCategoryPages = new Map<string, PageStats>();
 
-    const today = toDate(new Date());
-    const urls: string[] = [];
+    const addPage = (map: Map<string, PageStats>, key: string, updatedAt: Date) => {
+      const previous = map.get(key);
+      map.set(key, {
+        count: (previous?.count || 0) + 1,
+        updatedAt: !previous || updatedAt > previous.updatedAt
+          ? updatedAt
+          : previous.updatedAt,
+      });
+    };
 
-    for (const country of BROWSE_COUNTRIES) {
-      const persianName = COUNTRY_NAMES[country.code];
-      const lastUpdated = countryLastModMap.get(persianName);
-      const lastmod = lastUpdated ? toDate(lastUpdated) : today;
+    for (const listing of canonicalListings) {
+      const countryCode = countryCodeFromFa(listing.country);
+      const citySlug = citySlugFromFa(listing.city);
+      if (!countryCode) continue;
 
-      // Country page
-      urls.push(`  <url>
-    <loc>${SITE_URL}/browse/${country.code}</loc>
-    <lastmod>${lastmod}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>`);
+      addPage(countryPages, countryCode, listing.updatedAt);
+      addPage(
+        countryCategoryPages,
+        `${countryCode}|${listing.category.slug}`,
+        listing.updatedAt
+      );
 
-      // Country + category pages
-      for (const cat of categories) {
-        urls.push(`  <url>
-    <loc>${SITE_URL}/browse/${country.code}/category/${cat.slug}</loc>
-    <lastmod>${lastmod}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>`);
-      }
+      if (!citySlug) continue;
+      addPage(cityPages, `${countryCode}|${citySlug}`, listing.updatedAt);
+      addPage(
+        cityCategoryPages,
+        `${countryCode}|${citySlug}|${listing.category.slug}`,
+        listing.updatedAt
+      );
     }
 
-    // City pages + city/category combinations
-    for (const city of BROWSE_CITIES) {
-      const slug = toSlug(city.nameEn);
-      const persianName = COUNTRY_NAMES[city.country];
-      const lastUpdated = countryLastModMap.get(persianName);
-      const lastmod = lastUpdated ? toDate(lastUpdated) : today;
+    const urls: string[] = [];
 
+    for (const [countryCode, stats] of countryPages) {
       urls.push(`  <url>
-    <loc>${SITE_URL}/browse/${city.country}/${slug}</loc>
-    <lastmod>${lastmod}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
+    <loc>${SITE_URL}/browse/${countryCode}</loc>
+    <lastmod>${toDate(stats.updatedAt)}</lastmod>
   </url>`);
+    }
 
-      for (const cat of categories) {
-        urls.push(`  <url>
-    <loc>${SITE_URL}/browse/${city.country}/${slug}/${cat.slug}</loc>
-    <lastmod>${lastmod}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.5</priority>
+    for (const [key, stats] of countryCategoryPages) {
+      if (stats.count < 3) continue;
+      const [countryCode, categorySlug] = key.split('|');
+      urls.push(`  <url>
+    <loc>${SITE_URL}/browse/${countryCode}/category/${categorySlug}</loc>
+    <lastmod>${toDate(stats.updatedAt)}</lastmod>
   </url>`);
-      }
+    }
+
+    for (const [key, stats] of cityPages) {
+      if (stats.count < 3) continue;
+      const [countryCode, citySlug] = key.split('|');
+      urls.push(`  <url>
+    <loc>${SITE_URL}/browse/${countryCode}/${citySlug}</loc>
+    <lastmod>${toDate(stats.updatedAt)}</lastmod>
+  </url>`);
+    }
+
+    for (const [key, stats] of cityCategoryPages) {
+      if (stats.count < 3) continue;
+      const [countryCode, citySlug, categorySlug] = key.split('|');
+      urls.push(`  <url>
+    <loc>${SITE_URL}/browse/${countryCode}/${citySlug}/${categorySlug}</loc>
+    <lastmod>${toDate(stats.updatedAt)}</lastmod>
+  </url>`);
     }
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>

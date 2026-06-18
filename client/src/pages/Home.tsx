@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { categoriesApi, listingsApi } from '../services/api';
 import type { Category, Listing } from '../types';
@@ -7,6 +7,8 @@ import { getCountryByCode, getCitiesByCountry, toSlug } from '../i18n/locations'
 import CategoryCard from '../components/CategoryCard';
 import ListingCard from '../components/ListingCard';
 import { getWebsiteSchema } from '../utils/structuredData';
+
+const POPULAR_COUNTRY_CODES = ['us', 'ca', 'gb', 'ae', 'it', 'es', 'de', 'se'];
 
 export default function Home() {
   const [search, setSearch] = useState('');
@@ -111,21 +113,21 @@ export default function Home() {
           {countryCities.length > 0 && (
             <div className="mt-3 md:mt-6 flex flex-wrap justify-center gap-1.5 md:gap-2">
               {countryCities.slice(0, 8).map((city) => (
-                <button
+                <Link
                   key={city.nameEn}
-                  onClick={() => navigate(`/browse/${countryCode}/${toSlug(city.nameEn)}`)}
+                  to={`/browse/${countryCode}/${toSlug(city.nameEn)}`}
                   className="px-2.5 py-0.5 md:px-3 md:py-1 bg-white/20 rounded-full text-xs md:text-sm hover:bg-white/30 transition-colors"
                 >
                   {city.name}
-                </button>
+                </Link>
               ))}
               {countryCities.length > 8 && (
-                <button
-                  onClick={() => navigate(`/browse/${countryCode}`)}
+                <Link
+                  to={`/browse/${countryCode}`}
                   className="px-2.5 py-0.5 md:px-3 md:py-1 bg-white/20 rounded-full text-xs md:text-sm hover:bg-white/30 transition-colors"
                 >
                   +{(countryCities.length - 8).toLocaleString('fa-IR')} شهر دیگر
-                </button>
+                </Link>
               )}
             </div>
           )}
@@ -145,6 +147,38 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {!selectedCountry && (
+        <section className="border-y border-gray-200 bg-white">
+          <div className="max-w-7xl mx-auto px-4 py-6 md:py-8">
+            <div className="flex items-end justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-lg md:text-2xl font-bold">کشورهای پربازدید</h2>
+                <p className="text-sm text-gray-500 mt-1">راهنمای شهرها و کسب‌وکارهای ایرانی</p>
+              </div>
+              <Link to="/select-country" className="text-sm text-primary-700 hover:text-primary-800">
+                همه کشورها
+              </Link>
+            </div>
+            <nav aria-label="کشورهای پربازدید" className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+              {POPULAR_COUNTRY_CODES.map((code) => {
+                const item = getCountryByCode(code);
+                if (!item) return null;
+                return (
+                  <Link
+                    key={code}
+                    to={`/browse/${code}`}
+                    className="flex items-center gap-2 px-3 py-3 border border-gray-200 rounded-lg text-sm font-medium text-gray-800 hover:border-primary-300 hover:text-primary-700 transition-colors"
+                  >
+                    <span aria-hidden="true">{item.flag}</span>
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+        </section>
+      )}
 
       {/* Recent Listings */}
       <section className="max-w-7xl mx-auto px-4 pb-8 md:pb-16">
