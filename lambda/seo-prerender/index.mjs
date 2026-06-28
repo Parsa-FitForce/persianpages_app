@@ -182,7 +182,8 @@ function buildMetaTags(data) {
   // Canonical URL
   tags.push(`<link rel="canonical" href="${escapeHtml(data.url)}">`);
 
-  // Robots directive (override the static index.html default of "index, follow")
+  // Robots directive. Indexable pages intentionally omit a robots tag; private,
+  // missing, and thin pages get explicit noindex signals here or via React Helmet.
   if (data.noindex) {
     tags.push(`<meta name="robots" content="noindex, follow">`);
   }

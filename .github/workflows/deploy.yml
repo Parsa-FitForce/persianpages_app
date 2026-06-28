@@ -115,6 +115,10 @@ jobs:
           VITE_SUPPORT_URL: https://support.persianpages.com
         run: npm run build
 
+      - name: SEO shell check
+        working-directory: client
+        run: npm run seo:check
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
