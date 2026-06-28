@@ -126,6 +126,11 @@ interface SitemapCache {
   timestamp: number;
 }
 
+type SitemapUrl = {
+  loc: string;
+  lastmod?: Date;
+};
+
 let listingsSitemapCache: SitemapCache | null = null;
 let browseSitemapCache: SitemapCache | null = null;
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
@@ -135,63 +140,191 @@ export function invalidateSitemapCache() {
   browseSitemapCache = null;
 }
 
-// Sitemap index — includes lastmod from latest listing
+function renderUrlset(urls: SitemapUrl[]): string {
+  const entries = urls
+    .map(({ loc, lastmod }) => {
+      const lastmodTag = lastmod
+        ? `\n    <lastmod>${toDate(lastmod)}</lastmod>`
+        : '';
+
+      return `  <url>
+    <loc>${loc}</loc>${lastmodTag}
+  </url>`;
+    })
+    .join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${entries}
+</urlset>`;
+}
+
+function getStaticSitemapUrls(): SitemapUrl[] {
+  return [
+    { loc: `${SITE_URL}/` },
+    { loc: `${SITE_URL}/select-country` },
+  ];
+}
+
+async function getListingSitemapUrls(): Promise<SitemapUrl[]> {
+  const listings = await prisma.listing.findMany({
+    where: { isActive: true },
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      description: true,
+      address: true,
+      city: true,
+      country: true,
+      phone: true,
+      website: true,
+      placeId: true,
+      photos: true,
+      isActive: true,
+      isClaimed: true,
+      phoneVerified: true,
+      source: true,
+      updatedAt: true,
+    },
+    orderBy: { updatedAt: 'desc' },
+  });
+
+  return selectCanonicalListings(listings).map((listing) => ({
+    loc: `${SITE_URL}/listing/${listing.slug || listing.id}`,
+    lastmod: listing.updatedAt,
+  }));
+}
+
+async function getBrowseSitemapUrls(): Promise<SitemapUrl[]> {
+  const listings = await prisma.listing.findMany({
+    where: { isActive: true },
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      description: true,
+      address: true,
+      city: true,
+      country: true,
+      phone: true,
+      website: true,
+      placeId: true,
+      photos: true,
+      isActive: true,
+      isClaimed: true,
+      phoneVerified: true,
+      source: true,
+      updatedAt: true,
+      category: { select: { slug: true } },
+    },
+  });
+  const canonicalListings = selectCanonicalListings(
+    listings,
+    isSeoEligibleBrowseSource
+  );
+  type PageStats = { count: number; updatedAt: Date };
+  const countryPages = new Map<string, PageStats>();
+  const countryCategoryPages = new Map<string, PageStats>();
+  const cityPages = new Map<string, PageStats>();
+  const cityCategoryPages = new Map<string, PageStats>();
+
+  const addPage = (map: Map<string, PageStats>, key: string, updatedAt: Date) => {
+    const previous = map.get(key);
+    map.set(key, {
+      count: (previous?.count || 0) + 1,
+      updatedAt: !previous || updatedAt > previous.updatedAt
+        ? updatedAt
+        : previous.updatedAt,
+    });
+  };
+
+  for (const listing of canonicalListings) {
+    const countryCode = countryCodeFromFa(listing.country);
+    const citySlug = citySlugFromFa(listing.city);
+    if (!countryCode) continue;
+
+    addPage(countryPages, countryCode, listing.updatedAt);
+    addPage(
+      countryCategoryPages,
+      `${countryCode}|${listing.category.slug}`,
+      listing.updatedAt
+    );
+
+    if (!citySlug) continue;
+    addPage(cityPages, `${countryCode}|${citySlug}`, listing.updatedAt);
+    addPage(
+      cityCategoryPages,
+      `${countryCode}|${citySlug}|${listing.category.slug}`,
+      listing.updatedAt
+    );
+  }
+
+  const urls: SitemapUrl[] = [];
+
+  for (const [countryCode, stats] of countryPages) {
+    urls.push({
+      loc: `${SITE_URL}/browse/${countryCode}`,
+      lastmod: stats.updatedAt,
+    });
+  }
+
+  for (const [key, stats] of countryCategoryPages) {
+    if (stats.count < 3) continue;
+    const [countryCode, categorySlug] = key.split('|');
+    urls.push({
+      loc: `${SITE_URL}/browse/${countryCode}/category/${categorySlug}`,
+      lastmod: stats.updatedAt,
+    });
+  }
+
+  for (const [key, stats] of cityPages) {
+    if (stats.count < 3) continue;
+    const [countryCode, citySlug] = key.split('|');
+    urls.push({
+      loc: `${SITE_URL}/browse/${countryCode}/${citySlug}`,
+      lastmod: stats.updatedAt,
+    });
+  }
+
+  for (const [key, stats] of cityCategoryPages) {
+    if (stats.count < 3) continue;
+    const [countryCode, citySlug, categorySlug] = key.split('|');
+    urls.push({
+      loc: `${SITE_URL}/browse/${countryCode}/${citySlug}/${categorySlug}`,
+      lastmod: stats.updatedAt,
+    });
+  }
+
+  return urls;
+}
+
+// Root sitemap — a normal URL sitemap so Search Console reports discovered
+// pages directly. The split sitemaps below remain available for inspection and
+// future growth, but the catalog is currently small enough for one sitemap.
 router.get('/sitemap.xml', async (_req: Request, res: Response) => {
   try {
-    const latest = await prisma.listing.findFirst({
-      where: { isActive: true },
-      orderBy: { updatedAt: 'desc' },
-      select: { updatedAt: true },
-    });
-    const lastmod = latest ? toDate(latest.updatedAt) : toDate(new Date());
-
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <sitemap>
-    <loc>${SITE_URL}/sitemap-static.xml</loc>
-    <lastmod>${lastmod}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${SITE_URL}/sitemap-listings.xml</loc>
-    <lastmod>${lastmod}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${SITE_URL}/sitemap-browse.xml</loc>
-    <lastmod>${lastmod}</lastmod>
-  </sitemap>
-</sitemapindex>`;
-
+    const [listingUrls, browseUrls] = await Promise.all([
+      getListingSitemapUrls(),
+      getBrowseSitemapUrls(),
+    ]);
+    const xml = renderUrlset([
+      ...getStaticSitemapUrls(),
+      ...listingUrls,
+      ...browseUrls,
+    ]);
     res.set('Content-Type', 'application/xml');
     res.send(xml);
-  } catch {
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <sitemap>
-    <loc>${SITE_URL}/sitemap-static.xml</loc>
-  </sitemap>
-  <sitemap>
-    <loc>${SITE_URL}/sitemap-listings.xml</loc>
-  </sitemap>
-  <sitemap>
-    <loc>${SITE_URL}/sitemap-browse.xml</loc>
-  </sitemap>
-</sitemapindex>`;
+  } catch (error) {
+    console.error('Root sitemap generation error:', error);
     res.set('Content-Type', 'application/xml');
-    res.send(xml);
+    res.send(renderUrlset(getStaticSitemapUrls()));
   }
 });
 
 // Static pages sitemap — homepage + select-country
 router.get('/sitemap-static.xml', (_req: Request, res: Response) => {
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>${SITE_URL}/</loc>
-  </url>
-  <url>
-    <loc>${SITE_URL}/select-country</loc>
-  </url>
-</urlset>`;
+  const xml = renderUrlset(getStaticSitemapUrls());
 
   res.set('Content-Type', 'application/xml');
   res.send(xml);
@@ -205,43 +338,7 @@ router.get('/sitemap-listings.xml', async (_req: Request, res: Response) => {
       return res.send(listingsSitemapCache.xml);
     }
 
-    const listings = await prisma.listing.findMany({
-      where: { isActive: true },
-      select: {
-        id: true,
-        slug: true,
-        title: true,
-        description: true,
-        address: true,
-        city: true,
-        country: true,
-        phone: true,
-        website: true,
-        placeId: true,
-        photos: true,
-        isActive: true,
-        isClaimed: true,
-        phoneVerified: true,
-        source: true,
-        updatedAt: true,
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
-
-    const urls = selectCanonicalListings(listings)
-      .map(
-        (listing) =>
-          `  <url>
-    <loc>${SITE_URL}/listing/${listing.slug || listing.id}</loc>
-    <lastmod>${toDate(listing.updatedAt)}</lastmod>
-  </url>`
-      )
-      .join('\n');
-
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls}
-</urlset>`;
+    const xml = renderUrlset(await getListingSitemapUrls());
 
     listingsSitemapCache = { xml, timestamp: Date.now() };
 
@@ -261,109 +358,7 @@ router.get('/sitemap-browse.xml', async (_req: Request, res: Response) => {
       return res.send(browseSitemapCache.xml);
     }
 
-    const listings = await prisma.listing.findMany({
-      where: { isActive: true },
-      select: {
-        id: true,
-        slug: true,
-        title: true,
-        description: true,
-        address: true,
-        city: true,
-        country: true,
-        phone: true,
-        website: true,
-        placeId: true,
-        photos: true,
-        isActive: true,
-        isClaimed: true,
-        phoneVerified: true,
-        source: true,
-        updatedAt: true,
-        category: { select: { slug: true } },
-      },
-    });
-    const canonicalListings = selectCanonicalListings(
-      listings,
-      isSeoEligibleBrowseSource
-    );
-    type PageStats = { count: number; updatedAt: Date };
-    const countryPages = new Map<string, PageStats>();
-    const countryCategoryPages = new Map<string, PageStats>();
-    const cityPages = new Map<string, PageStats>();
-    const cityCategoryPages = new Map<string, PageStats>();
-
-    const addPage = (map: Map<string, PageStats>, key: string, updatedAt: Date) => {
-      const previous = map.get(key);
-      map.set(key, {
-        count: (previous?.count || 0) + 1,
-        updatedAt: !previous || updatedAt > previous.updatedAt
-          ? updatedAt
-          : previous.updatedAt,
-      });
-    };
-
-    for (const listing of canonicalListings) {
-      const countryCode = countryCodeFromFa(listing.country);
-      const citySlug = citySlugFromFa(listing.city);
-      if (!countryCode) continue;
-
-      addPage(countryPages, countryCode, listing.updatedAt);
-      addPage(
-        countryCategoryPages,
-        `${countryCode}|${listing.category.slug}`,
-        listing.updatedAt
-      );
-
-      if (!citySlug) continue;
-      addPage(cityPages, `${countryCode}|${citySlug}`, listing.updatedAt);
-      addPage(
-        cityCategoryPages,
-        `${countryCode}|${citySlug}|${listing.category.slug}`,
-        listing.updatedAt
-      );
-    }
-
-    const urls: string[] = [];
-
-    for (const [countryCode, stats] of countryPages) {
-      urls.push(`  <url>
-    <loc>${SITE_URL}/browse/${countryCode}</loc>
-    <lastmod>${toDate(stats.updatedAt)}</lastmod>
-  </url>`);
-    }
-
-    for (const [key, stats] of countryCategoryPages) {
-      if (stats.count < 3) continue;
-      const [countryCode, categorySlug] = key.split('|');
-      urls.push(`  <url>
-    <loc>${SITE_URL}/browse/${countryCode}/category/${categorySlug}</loc>
-    <lastmod>${toDate(stats.updatedAt)}</lastmod>
-  </url>`);
-    }
-
-    for (const [key, stats] of cityPages) {
-      if (stats.count < 3) continue;
-      const [countryCode, citySlug] = key.split('|');
-      urls.push(`  <url>
-    <loc>${SITE_URL}/browse/${countryCode}/${citySlug}</loc>
-    <lastmod>${toDate(stats.updatedAt)}</lastmod>
-  </url>`);
-    }
-
-    for (const [key, stats] of cityCategoryPages) {
-      if (stats.count < 3) continue;
-      const [countryCode, citySlug, categorySlug] = key.split('|');
-      urls.push(`  <url>
-    <loc>${SITE_URL}/browse/${countryCode}/${citySlug}/${categorySlug}</loc>
-    <lastmod>${toDate(stats.updatedAt)}</lastmod>
-  </url>`);
-    }
-
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.join('\n')}
-</urlset>`;
+    const xml = renderUrlset(await getBrowseSitemapUrls());
 
     browseSitemapCache = { xml, timestamp: Date.now() };
 
