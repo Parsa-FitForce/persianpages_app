@@ -39,11 +39,10 @@ resource "aws_cloudfront_origin_access_control" "frontend" {
 
 # CloudFront Distribution
 resource "aws_cloudfront_distribution" "frontend" {
-  enabled             = true
-  is_ipv6_enabled     = true
-  default_root_object = "index.html"
-  comment             = "${local.name_prefix} Frontend Distribution"
-  price_class         = "PriceClass_100" # US, Canada, Europe
+  enabled         = true
+  is_ipv6_enabled = true
+  comment         = "${local.name_prefix} Frontend Distribution"
+  price_class     = "PriceClass_100" # US, Canada, Europe
 
   # Custom domain (if provided)
   aliases = var.domain_name != "" ? [var.domain_name, "www.${var.domain_name}"] : []
