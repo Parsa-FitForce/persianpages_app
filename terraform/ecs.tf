@@ -6,7 +6,7 @@ resource "aws_ecs_cluster" "main" {
 
   setting {
     name  = "containerInsights"
-    value = "enabled"
+    value = "disabled"
   }
 
   tags = {
@@ -256,9 +256,9 @@ resource "aws_ecs_service" "api" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = aws_subnet.private[*].id
+    subnets          = aws_subnet.public[*].id
     security_groups  = [aws_security_group.ecs.id]
-    assign_public_ip = false
+    assign_public_ip = true
   }
 
   load_balancer {
