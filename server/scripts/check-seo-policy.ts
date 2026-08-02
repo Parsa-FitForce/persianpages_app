@@ -3,7 +3,10 @@ import {
   MIN_INDEXABLE_BROWSE_LISTINGS,
   selectCanonicalListings,
 } from '../src/utils/seo.js';
-import { buildBrowsePageContent } from '../src/utils/browseContent.js';
+import {
+  buildBrowsePageContent,
+  EDITORIAL_BROWSE_PAGE_KEYS,
+} from '../src/utils/browseContent.js';
 
 type TestListing = Parameters<typeof isSeoEligibleListing>[0];
 
@@ -90,6 +93,47 @@ assert(
 assert(
   !Object.values(restaurantBrowseContent).flat().join(' ').includes('undefined'),
   'Browse content must never expose missing template values.'
+);
+assert(EDITORIAL_BROWSE_PAGE_KEYS.length === 28, 'Every currently indexable city/category page should have an editorial intro.');
+const categoryNames: Record<string, string> = {
+  medical: 'پزشکی',
+  legal: 'حقوقی',
+  restaurant: 'رستوران',
+  grocery: 'سوپرمارکت',
+  financial: 'مالی',
+};
+const editorialIntros = EDITORIAL_BROWSE_PAGE_KEYS.map((key) => {
+  const [countryName, cityName, categorySlug] = key.split('|');
+  const content = buildBrowsePageContent({
+    countryName,
+    cityName,
+    categorySlug,
+    categoryName: categoryNames[categorySlug] || categorySlug,
+    totalCount: 10,
+  });
+  assert(content.intro.includes('۱۰'), `Editorial intro ${key} should retain the live localized count.`);
+  assert(content.intro.length >= 180, `Editorial intro ${key} should contain substantive local guidance.`);
+  assert(!content.intro.startsWith('در این صفحه'), `Editorial intro ${key} should not use the generic fallback.`);
+  return content.intro;
+});
+assert(
+  new Set(editorialIntros).size === EDITORIAL_BROWSE_PAGE_KEYS.length,
+  'Editorial city/category intros should be unique.'
+);
+assert(
+  medicalBrowseContent.intro.includes('انتاریو'),
+  'Priority city/category pages should use hand-written local editorial copy.'
+);
+const genericBrowseContent = buildBrowsePageContent({
+  countryName: 'ژاپن',
+  cityName: 'اوساکا',
+  categorySlug: 'financial',
+  categoryName: 'مالی',
+  totalCount: 3,
+});
+assert(
+  genericBrowseContent.intro.startsWith('در این صفحه'),
+  'Non-priority pages should retain the safe generated fallback.'
 );
 
 console.log('SEO policy check passed.');
