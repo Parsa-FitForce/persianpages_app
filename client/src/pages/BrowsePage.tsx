@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { categoriesApi, listingsApi } from '../services/api';
-import type { Category, Listing } from '../types';
+import type { BrowsePageContent, Category, Listing } from '../types';
 import { getCountryByCode, getCitiesByCountry, getCityBySlug, toSlug } from '../i18n/locations';
 import ListingCard from '../components/ListingCard';
 import { getCollectionPageSchema } from '../utils/structuredData';
@@ -22,6 +22,9 @@ export default function BrowsePage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
+  const [browseContent, setBrowseContent] = useState<BrowsePageContent | null>(null);
+  const [categoryFacets, setCategoryFacets] = useState<{ slug: string; count: number }[]>([]);
+  const [cityFacets, setCityFacets] = useState<{ name: string; count: number }[]>([]);
 
   const country = getCountryByCode(countryCode);
   const city = citySlug ? getCityBySlug(countryCode, citySlug) : undefined;
@@ -37,6 +40,10 @@ export default function BrowsePage() {
     categoriesApi.getAll().then((res) => setCategories(res.data));
   }, []);
 
+  useEffect(() => {
+    setPage(1);
+  }, [countryCode, citySlug, categorySlug]);
+
   const selectedCategory = categories.find(c => c.slug === resolvedCategorySlug);
   const invalidCategory = Boolean(
     resolvedCategorySlug
@@ -45,29 +52,42 @@ export default function BrowsePage() {
   );
 
   useEffect(() => {
+    let cancelled = false;
     if (invalidLocation) {
       setListings([]);
       setTotal(0);
       setPages(1);
+      setBrowseContent(null);
+      setCategoryFacets([]);
+      setCityFacets([]);
       setLoading(false);
-      return;
+      return () => { cancelled = true; };
     }
 
     setLoading(true);
     listingsApi
-      .getAll({
+      .getBrowse({
         category: resolvedCategorySlug,
         city: resolvedCity?.name,
-        country: country?.name,
+        country: country?.name || '',
         page,
       })
       .then((res) => {
+        if (cancelled) return;
         setListings(res.data.listings);
         setTotal(res.data.pagination.total);
         setPages(res.data.pagination.pages);
+        setBrowseContent(res.data.content);
+        setCategoryFacets(res.data.facets.categories);
+        setCityFacets(res.data.facets.cities);
       })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .catch((error) => {
+        if (!cancelled) console.error(error);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
   }, [resolvedCategorySlug, resolvedCity?.name, country?.name, page, invalidLocation]);
 
   // Build SEO meta
@@ -91,7 +111,7 @@ export default function BrowsePage() {
   const pageTitle = titleParts.length > 0
     ? `${titleParts.join(' - ')} | پرشین‌پیجز`
     : 'پرشین‌پیجز';
-  const pageDescription = descParts.join(' ') + ' را پیدا کنید.';
+  const pageDescription = browseContent?.metaDescription || (descParts.join(' ') + ' را پیدا کنید.');
 
   let canonicalPath = `/browse/${countryCode}`;
   if (resolvedCity) {
@@ -107,6 +127,14 @@ export default function BrowsePage() {
     : selectedCategory
       ? `${selectedCategory.nameFa} در ${country?.name || ''}`
       : country?.name || '';
+  const visibleCategorySlugs = new Set(categoryFacets.map((facet) => facet.slug));
+  const visibleCategories = categories.filter(
+    (category) => visibleCategorySlugs.has(category.slug) || category.slug === resolvedCategorySlug
+  );
+  const visibleCityNames = new Set(cityFacets.map((facet) => facet.name));
+  const visibleCities = countryCities.filter(
+    (candidate) => visibleCityNames.has(candidate.name) || candidate.name === resolvedCity?.name
+  );
 
   if (invalidLocation || invalidCategory) {
     return (
@@ -173,7 +201,7 @@ export default function BrowsePage() {
             >
               همه
             </Link>
-            {categories.map((cat) => {
+            {visibleCategories.map((cat) => {
               const catUrl = resolvedCity
                 ? `/browse/${countryCode}/${citySlug}/${cat.slug}`
                 : `/browse/${countryCode}/category/${cat.slug}`;
@@ -196,7 +224,7 @@ export default function BrowsePage() {
         </div>
 
         {/* City Pills */}
-        {countryCities.length > 0 && !isCategoryRoute && (
+        {visibleCities.length > 0 && (
           <div className="mb-4 md:mb-6">
             <h3 className="text-sm font-medium text-gray-500 mb-2 md:mb-3">شهر</h3>
             <div className="flex md:flex-wrap gap-2 overflow-x-auto pb-1 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide">
@@ -210,7 +238,7 @@ export default function BrowsePage() {
               >
                 همه شهرها
               </Link>
-              {countryCities.map((c) => {
+              {visibleCities.map((c) => {
                 const slug = toSlug(c.nameEn);
                 const cityUrl = resolvedCategorySlug
                   ? `/browse/${countryCode}/${slug}/${resolvedCategorySlug}`
@@ -239,6 +267,11 @@ export default function BrowsePage() {
             <span className="font-semibold text-gray-900">{total.toLocaleString('fa-IR')}</span> کسب‌وکار یافت شد
           </p>
         </div>
+        {!loading && browseContent && (
+          <p className="mb-6 max-w-3xl text-sm md:text-base leading-7 text-gray-600">
+            {browseContent.intro}
+          </p>
+        )}
 
         {/* Results */}
         {loading ? (
@@ -306,6 +339,33 @@ export default function BrowsePage() {
               </div>
             )}
           </>
+        )}
+
+        {!loading && browseContent && (
+          <section className="mt-10 rounded-2xl border border-gray-200 bg-white p-5 md:p-8" aria-labelledby="browse-guide-heading">
+            <h2 id="browse-guide-heading" className="text-xl md:text-2xl font-bold text-gray-900 mb-4">
+              {browseContent.overviewHeading}
+            </h2>
+            <div className="space-y-3 text-sm md:text-base leading-7 text-gray-600">
+              {browseContent.paragraphs.map((paragraph) => (
+                <p key={paragraph}>{paragraph}</p>
+              ))}
+            </div>
+            <h3 className="text-base md:text-lg font-semibold text-gray-900 mt-6 mb-3">
+              {browseContent.checklistHeading}
+            </h3>
+            <ul className="space-y-2 text-sm md:text-base text-gray-700">
+              {browseContent.checklist.map((item) => (
+                <li key={item} className="flex items-start gap-2">
+                  <span className="mt-1 text-primary-600" aria-hidden="true">✓</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-6 border-t border-gray-100 pt-4 text-xs md:text-sm leading-6 text-gray-500">
+              {browseContent.accuracyNote}
+            </p>
+          </section>
         )}
       </div>
     </div>

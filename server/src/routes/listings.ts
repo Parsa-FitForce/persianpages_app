@@ -5,6 +5,12 @@ import { authenticate, optionalAuth } from '../middleware/auth.js';
 import { normalizePhone, toE164 } from '../utils/phone.js';
 import { generateUniqueSlug } from '../utils/slug.js';
 import { invalidateSitemapCache } from './sitemap.js';
+import {
+  isSeoEligibleBrowseSource,
+  MIN_INDEXABLE_BROWSE_LISTINGS,
+  selectCanonicalListings,
+} from '../utils/seo.js';
+import { buildBrowsePageContent } from '../utils/browseContent.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -72,6 +78,97 @@ router.get('/', optionalAuth, async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Get listings error:', error);
     res.status(500).json({ error: 'خطا در دریافت کسب‌وکارها' });
+  }
+});
+
+// Curated browse results used by indexable country/city/category landing pages.
+// This intentionally mirrors the sitemap and prerender quality policy so users
+// and search engines see the same result count and the same canonical listings.
+router.get('/browse', async (req: Request, res: Response) => {
+  try {
+    const country = typeof req.query.country === 'string' ? req.query.country.trim() : '';
+    const city = typeof req.query.city === 'string' ? req.query.city.trim() : '';
+    const categorySlug = typeof req.query.category === 'string' ? req.query.category.trim() : '';
+    const page = Math.max(1, Number.parseInt(String(req.query.page || '1'), 10) || 1);
+    const limit = Math.min(24, Math.max(1, Number.parseInt(String(req.query.limit || '12'), 10) || 12));
+
+    if (!country) {
+      return res.status(400).json({ error: 'کشور الزامی است' });
+    }
+
+    const countryListings = await prisma.listing.findMany({
+      where: { country, isActive: true },
+      include: {
+        category: true,
+        user: { select: { id: true, name: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+    const canonicalCountryListings = selectCanonicalListings(
+      countryListings,
+      isSeoEligibleBrowseSource
+    );
+    const cityMatches = (listingCity: string) => !city
+      || listingCity.toLocaleLowerCase().includes(city.toLocaleLowerCase());
+    const categoryMatches = (listingCategorySlug: string) => !categorySlug
+      || listingCategorySlug === categorySlug;
+
+    const filteredListings = canonicalCountryListings.filter(
+      (listing) => cityMatches(listing.city) && categoryMatches(listing.category.slug)
+    );
+    const categoryCandidates = canonicalCountryListings.filter((listing) => cityMatches(listing.city));
+    const cityCandidates = canonicalCountryListings.filter((listing) => categoryMatches(listing.category.slug));
+
+    const categoryCounts = new Map<string, { nameFa: string; count: number }>();
+    for (const listing of categoryCandidates) {
+      const current = categoryCounts.get(listing.category.slug);
+      categoryCounts.set(listing.category.slug, {
+        nameFa: listing.category.nameFa,
+        count: (current?.count || 0) + 1,
+      });
+    }
+    const cityCounts = new Map<string, number>();
+    for (const listing of cityCandidates) {
+      cityCounts.set(listing.city, (cityCounts.get(listing.city) || 0) + 1);
+    }
+
+    const selectedCategory = categorySlug
+      ? countryListings.find((listing) => listing.category.slug === categorySlug)?.category
+      : undefined;
+    const total = filteredListings.length;
+    const start = (page - 1) * limit;
+    const content = buildBrowsePageContent({
+      countryName: country,
+      cityName: city || undefined,
+      categorySlug: categorySlug || undefined,
+      categoryName: selectedCategory?.nameFa,
+      totalCount: total,
+    });
+
+    res.set('Cache-Control', 'public, max-age=300');
+    return res.json({
+      listings: filteredListings.slice(start, start + limit),
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+      facets: {
+        categories: [...categoryCounts.entries()]
+          .filter(([, value]) => value.count >= MIN_INDEXABLE_BROWSE_LISTINGS)
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([slug, value]) => ({ slug, ...value })),
+        cities: [...cityCounts.entries()]
+          .filter(([, count]) => count >= MIN_INDEXABLE_BROWSE_LISTINGS)
+          .sort((a, b) => b[1] - a[1])
+          .map(([name, count]) => ({ name, count })),
+      },
+      content,
+    });
+  } catch (error) {
+    console.error('Get browse listings error:', error);
+    return res.status(500).json({ error: 'خطا در دریافت کسب‌وکارها' });
   }
 });
 

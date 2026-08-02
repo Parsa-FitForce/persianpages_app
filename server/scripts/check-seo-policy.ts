@@ -3,6 +3,7 @@ import {
   MIN_INDEXABLE_BROWSE_LISTINGS,
   selectCanonicalListings,
 } from '../src/utils/seo.js';
+import { buildBrowsePageContent } from '../src/utils/browseContent.js';
 
 type TestListing = Parameters<typeof isSeoEligibleListing>[0];
 
@@ -63,5 +64,32 @@ const canonical = selectCanonicalListings([weakerDuplicate, strongerDuplicate]);
 
 assert(canonical.length === 1, 'Duplicate listings should collapse to one canonical listing.');
 assert(canonical[0]?.id === 'stronger', 'The richer duplicate should win canonical selection.');
+
+const restaurantBrowseContent = buildBrowsePageContent({
+  countryName: 'آمریکا',
+  cityName: 'لس‌آنجلس',
+  categorySlug: 'restaurant',
+  categoryName: 'رستوران',
+  totalCount: 24,
+});
+const medicalBrowseContent = buildBrowsePageContent({
+  countryName: 'کانادا',
+  cityName: 'تورنتو',
+  categorySlug: 'medical',
+  categoryName: 'پزشکی',
+  totalCount: 18,
+});
+
+assert(restaurantBrowseContent.intro.includes('۲۴'), 'Browse content should include the real localized result count.');
+assert(restaurantBrowseContent.overviewHeading.includes('لس‌آنجلس'), 'Browse content should identify the selected city.');
+assert(restaurantBrowseContent.checklist.length >= 3, 'Browse content should include actionable selection guidance.');
+assert(
+  restaurantBrowseContent.paragraphs.join(' ') !== medicalBrowseContent.paragraphs.join(' '),
+  'Different browse categories should receive category-specific content.'
+);
+assert(
+  !Object.values(restaurantBrowseContent).flat().join(' ').includes('undefined'),
+  'Browse content must never expose missing template values.'
+);
 
 console.log('SEO policy check passed.');

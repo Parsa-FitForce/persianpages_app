@@ -63,6 +63,24 @@ export interface ListingsResponse {
   };
 }
 
+export interface BrowsePageContent {
+  intro: string;
+  overviewHeading: string;
+  paragraphs: string[];
+  checklistHeading: string;
+  checklist: string[];
+  accuracyNote: string;
+  metaDescription: string;
+}
+
+export interface BrowseListingsResponse extends ListingsResponse {
+  facets: {
+    categories: { slug: string; nameFa: string; count: number }[];
+    cities: { name: string; count: number }[];
+  };
+  content: BrowsePageContent;
+}
+
 export interface AuthResponse {
   user: User;
   token: string;
