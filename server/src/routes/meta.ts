@@ -1,9 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import {
   findCanonicalListing,
   isSeoEligibleBrowseSource,
   isSeoEligibleListing,
+  MIN_INDEXABLE_BROWSE_LISTINGS,
   selectCanonicalListings,
 } from '../utils/seo.js';
 
@@ -206,8 +207,53 @@ type BrowseListing = {
   category: { nameFa: string };
 };
 
+type IndexableBrowseListing = BrowseListing & {
+  address: string;
+  country: string;
+  phone: string | null;
+  website: string | null;
+  placeId: string | null;
+  photos: string[];
+  businessHours: unknown;
+  isActive: boolean;
+  isClaimed: boolean;
+  phoneVerified: boolean;
+  source: string;
+  updatedAt: Date;
+  category: { nameFa: string; slug: string };
+};
+
 type BreadcrumbItem = { label: string; href?: string };
 type NavLink = { label: string; href: string };
+
+async function getIndexableBrowseListings(where: Prisma.ListingWhereInput): Promise<IndexableBrowseListing[]> {
+  const listings = await prisma.listing.findMany({
+    where,
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      description: true,
+      address: true,
+      city: true,
+      country: true,
+      phone: true,
+      website: true,
+      placeId: true,
+      photos: true,
+      businessHours: true,
+      isActive: true,
+      isClaimed: true,
+      phoneVerified: true,
+      source: true,
+      updatedAt: true,
+      category: { select: { nameFa: true, slug: true } },
+    },
+    orderBy: { updatedAt: 'desc' },
+  });
+
+  return selectCanonicalListings(listings, isSeoEligibleBrowseSource);
+}
 
 function renderBreadcrumbs(items: BreadcrumbItem[]): string {
   if (items.length === 0) return '';
@@ -378,7 +424,6 @@ function renderListingBody(opts: {
 }
 
 const BROWSE_PAGE_SIZE = 12;
-const MIN_INDEXABLE_BROWSE_RESULTS = 3;
 
 const FALLBACK_META = {
   title: `${SITE_NAME} | دایرکتوری مشاغل ایرانی`,
@@ -425,6 +470,7 @@ router.get('/home', async (_req: Request, res: Response) => {
         website: true,
         placeId: true,
         photos: true,
+        businessHours: true,
         isActive: true,
         isClaimed: true,
         phoneVerified: true,
@@ -492,14 +538,8 @@ router.get('/browse/:countryCode', async (req: Request, res: Response) => {
     }
 
     const where = { country: country.name, isActive: true };
-    const [listingCount, listings, categoriesInCountry, citiesAgg] = await Promise.all([
-      prisma.listing.count({ where }),
-      prisma.listing.findMany({
-        where,
-        select: { id: true, slug: true, title: true, description: true, city: true, category: { select: { nameFa: true } } },
-        orderBy: { updatedAt: 'desc' },
-        take: BROWSE_PAGE_SIZE,
-      }),
+    const [indexableListings, categoriesInCountry, citiesAgg] = await Promise.all([
+      getIndexableBrowseListings(where),
       prisma.listing.groupBy({
         by: ['categoryId'],
         where,
@@ -535,9 +575,10 @@ router.get('/browse/:countryCode', async (req: Request, res: Response) => {
       })
       .filter((x): x is NavLink => x !== null);
 
+    const indexableListingCount = indexableListings.length;
     const url = `${SITE_URL}/browse/${req.params.countryCode}`;
     const title = `کسب‌وکارهای ایرانی در ${country.name} | ${SITE_NAME}`;
-    const description = `مشاهده ${listingCount} کسب‌وکار ایرانی در ${country.name} - ${SITE_NAME}`;
+    const description = `مشاهده ${indexableListingCount} کسب‌وکار ایرانی در ${country.name} - ${SITE_NAME}`;
     const breadcrumbs: BreadcrumbItem[] = [
       { label: SITE_NAME, href: '/' },
       { label: country.name },
@@ -545,8 +586,8 @@ router.get('/browse/:countryCode', async (req: Request, res: Response) => {
     const bodyHtml = renderBrowseBody({
       h1: `کسب‌وکارهای ایرانی در ${country.name}`,
       intro: `راهنمای جامع کسب‌وکارهای ایرانی در ${country.name} - شامل رستوران، پزشک، وکیل، املاک، خدمات و سایر مشاغل ایرانی.`,
-      listings,
-      totalCount: listingCount,
+      listings: indexableListings.slice(0, BROWSE_PAGE_SIZE),
+      totalCount: indexableListingCount,
       breadcrumbs,
       navSections: [
         ...(categoryLinks.length > 0 ? [{ heading: `دسته‌بندی‌ها در ${country.name}`, links: categoryLinks }] : []),
@@ -560,7 +601,7 @@ router.get('/browse/:countryCode', async (req: Request, res: Response) => {
       image: DEFAULT_IMAGE,
       url,
       type: 'CollectionPage',
-      noindex: listingCount < MIN_INDEXABLE_BROWSE_RESULTS,
+      noindex: indexableListingCount < MIN_INDEXABLE_BROWSE_LISTINGS,
       bodyHtml,
       jsonLd: [
         {
@@ -594,14 +635,8 @@ router.get('/browse/:countryCode/category/:categorySlug', async (req: Request, r
     }
 
     const where = { country: country.name, categoryId: category.id, isActive: true };
-    const [listingCount, listings, citiesAgg] = await Promise.all([
-      prisma.listing.count({ where }),
-      prisma.listing.findMany({
-        where,
-        select: { id: true, slug: true, title: true, description: true, city: true, category: { select: { nameFa: true } } },
-        orderBy: { updatedAt: 'desc' },
-        take: BROWSE_PAGE_SIZE,
-      }),
+    const [indexableListings, citiesAgg] = await Promise.all([
+      getIndexableBrowseListings(where),
       prisma.listing.groupBy({
         by: ['city'],
         where,
@@ -631,9 +666,10 @@ router.get('/browse/:countryCode/category/:categorySlug', async (req: Request, r
       href: `/browse/${req.params.countryCode}/category/${c.slug}`,
     }));
 
+    const indexableListingCount = indexableListings.length;
     const url = `${SITE_URL}/browse/${req.params.countryCode}/category/${req.params.categorySlug}`;
     const title = `${category.nameFa} ایرانی در ${country.name} | ${SITE_NAME}`;
-    const description = `مشاهده ${listingCount} ${category.nameFa} ایرانی در ${country.name} - ${SITE_NAME}`;
+    const description = `مشاهده ${indexableListingCount} ${category.nameFa} ایرانی در ${country.name} - ${SITE_NAME}`;
     const breadcrumbs: BreadcrumbItem[] = [
       { label: SITE_NAME, href: '/' },
       { label: country.name, href: `/browse/${req.params.countryCode}` },
@@ -642,8 +678,8 @@ router.get('/browse/:countryCode/category/:categorySlug', async (req: Request, r
     const bodyHtml = renderBrowseBody({
       h1: `${category.nameFa} ایرانی در ${country.name}`,
       intro: `لیست کامل ${category.nameFa} ایرانی در ${country.name}. اطلاعات تماس، آدرس و توضیحات هر کسب‌وکار.`,
-      listings,
-      totalCount: listingCount,
+      listings: indexableListings.slice(0, BROWSE_PAGE_SIZE),
+      totalCount: indexableListingCount,
       breadcrumbs,
       navSections: [
         ...(cityLinks.length > 0 ? [{ heading: `${category.nameFa} در شهرهای ${country.name}`, links: cityLinks }] : []),
@@ -657,7 +693,7 @@ router.get('/browse/:countryCode/category/:categorySlug', async (req: Request, r
       image: DEFAULT_IMAGE,
       url,
       type: 'CollectionPage',
-      noindex: listingCount < MIN_INDEXABLE_BROWSE_RESULTS,
+      noindex: indexableListingCount < MIN_INDEXABLE_BROWSE_LISTINGS,
       bodyHtml,
       jsonLd: [
         {
@@ -666,7 +702,7 @@ router.get('/browse/:countryCode/category/:categorySlug', async (req: Request, r
           name: title,
           description,
           url,
-          numberOfItems: listingCount,
+          numberOfItems: indexableListingCount,
           isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL },
         },
         breadcrumbJsonLd(breadcrumbs.map((b, i) => ({ ...b, href: i === breadcrumbs.length - 1 ? url : b.href }))),
@@ -702,14 +738,8 @@ router.get('/browse/:countryCode/:citySlug/:categorySlug', async (req: Request, 
       categoryId: category.id,
       isActive: true,
     };
-    const [listingCount, listings] = await Promise.all([
-      prisma.listing.count({ where }),
-      prisma.listing.findMany({
-        where,
-        select: { id: true, slug: true, title: true, description: true, city: true, category: { select: { nameFa: true } } },
-        orderBy: { updatedAt: 'desc' },
-        take: BROWSE_PAGE_SIZE,
-      }),
+    const [indexableListings] = await Promise.all([
+      getIndexableBrowseListings(where),
     ]);
 
     const allCategories = await prisma.category.findMany({
@@ -722,9 +752,10 @@ router.get('/browse/:countryCode/:citySlug/:categorySlug', async (req: Request, 
       href: `/browse/${req.params.countryCode}/${req.params.citySlug}/${c.slug}`,
     }));
 
+    const indexableListingCount = indexableListings.length;
     const url = `${SITE_URL}/browse/${req.params.countryCode}/${req.params.citySlug}/${req.params.categorySlug}`;
     const title = `${category.nameFa} ایرانی در ${city.nameFa}, ${country.name} | ${SITE_NAME}`;
-    const description = `مشاهده ${listingCount} ${category.nameFa} ایرانی در ${city.nameFa} - ${SITE_NAME}`;
+    const description = `مشاهده ${indexableListingCount} ${category.nameFa} ایرانی در ${city.nameFa} - ${SITE_NAME}`;
     const breadcrumbs: BreadcrumbItem[] = [
       { label: SITE_NAME, href: '/' },
       { label: country.name, href: `/browse/${req.params.countryCode}` },
@@ -734,8 +765,8 @@ router.get('/browse/:countryCode/:citySlug/:categorySlug', async (req: Request, 
     const bodyHtml = renderBrowseBody({
       h1: `${category.nameFa} ایرانی در ${city.nameFa}`,
       intro: `لیست ${category.nameFa} ایرانی در شهر ${city.nameFa}، ${country.name}.`,
-      listings,
-      totalCount: listingCount,
+      listings: indexableListings.slice(0, BROWSE_PAGE_SIZE),
+      totalCount: indexableListingCount,
       breadcrumbs,
       navSections: [
         { heading: `سایر کسب‌وکارهای ایرانی در ${city.nameFa}`, links: [
@@ -752,7 +783,7 @@ router.get('/browse/:countryCode/:citySlug/:categorySlug', async (req: Request, 
       image: DEFAULT_IMAGE,
       url,
       type: 'CollectionPage',
-      noindex: listingCount < MIN_INDEXABLE_BROWSE_RESULTS,
+      noindex: indexableListingCount < MIN_INDEXABLE_BROWSE_LISTINGS,
       bodyHtml,
       jsonLd: [
         {
@@ -761,7 +792,7 @@ router.get('/browse/:countryCode/:citySlug/:categorySlug', async (req: Request, 
           name: title,
           description,
           url,
-          numberOfItems: listingCount,
+          numberOfItems: indexableListingCount,
           isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL },
         },
         breadcrumbJsonLd(breadcrumbs.map((b, i) => ({ ...b, href: i === breadcrumbs.length - 1 ? url : b.href }))),
@@ -791,14 +822,8 @@ router.get('/browse/:countryCode/:citySlug', async (req: Request, res: Response)
       city: { contains: city.nameFa, mode: 'insensitive' as const },
       isActive: true,
     };
-    const [listingCount, listings, categoriesInCity] = await Promise.all([
-      prisma.listing.count({ where }),
-      prisma.listing.findMany({
-        where,
-        select: { id: true, slug: true, title: true, description: true, city: true, category: { select: { nameFa: true } } },
-        orderBy: { updatedAt: 'desc' },
-        take: BROWSE_PAGE_SIZE,
-      }),
+    const [indexableListings, categoriesInCity] = await Promise.all([
+      getIndexableBrowseListings(where),
       prisma.listing.groupBy({
         by: ['categoryId'],
         where,
@@ -818,9 +843,10 @@ router.get('/browse/:countryCode/:citySlug', async (req: Request, res: Response)
       href: `/browse/${req.params.countryCode}/${req.params.citySlug}/${c.slug}`,
     }));
 
+    const indexableListingCount = indexableListings.length;
     const url = `${SITE_URL}/browse/${req.params.countryCode}/${req.params.citySlug}`;
     const title = `کسب‌وکارهای ایرانی در ${city.nameFa}, ${country.name} | ${SITE_NAME}`;
-    const description = `مشاهده ${listingCount} کسب‌وکار ایرانی در ${city.nameFa} - ${SITE_NAME}`;
+    const description = `مشاهده ${indexableListingCount} کسب‌وکار ایرانی در ${city.nameFa} - ${SITE_NAME}`;
     const breadcrumbs: BreadcrumbItem[] = [
       { label: SITE_NAME, href: '/' },
       { label: country.name, href: `/browse/${req.params.countryCode}` },
@@ -829,8 +855,8 @@ router.get('/browse/:countryCode/:citySlug', async (req: Request, res: Response)
     const bodyHtml = renderBrowseBody({
       h1: `کسب‌وکارهای ایرانی در ${city.nameFa}`,
       intro: `راهنمای کسب‌وکارهای ایرانی در شهر ${city.nameFa}، ${country.name}.`,
-      listings,
-      totalCount: listingCount,
+      listings: indexableListings.slice(0, BROWSE_PAGE_SIZE),
+      totalCount: indexableListingCount,
       breadcrumbs,
       navSections: [
         ...(categoryLinks.length > 0 ? [{ heading: `دسته‌بندی‌ها در ${city.nameFa}`, links: categoryLinks }] : []),
@@ -846,7 +872,7 @@ router.get('/browse/:countryCode/:citySlug', async (req: Request, res: Response)
       image: DEFAULT_IMAGE,
       url,
       type: 'CollectionPage',
-      noindex: listingCount < MIN_INDEXABLE_BROWSE_RESULTS,
+      noindex: indexableListingCount < MIN_INDEXABLE_BROWSE_LISTINGS,
       bodyHtml,
       jsonLd: [
         {

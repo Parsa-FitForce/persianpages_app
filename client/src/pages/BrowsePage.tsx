@@ -7,6 +7,8 @@ import { getCountryByCode, getCitiesByCountry, getCityBySlug, toSlug } from '../
 import ListingCard from '../components/ListingCard';
 import { getCollectionPageSchema } from '../utils/structuredData';
 
+const MIN_INDEXABLE_BROWSE_LISTINGS = 10;
+
 export default function BrowsePage() {
   const { countryCode = '', citySlug, categorySlug } = useParams<{
     countryCode: string;
@@ -134,7 +136,7 @@ export default function BrowsePage() {
         <meta property="og:url" content={canonicalUrl} />
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="PersianPages" />
-        {!loading && total < 3 ? (
+        {!loading && total < MIN_INDEXABLE_BROWSE_LISTINGS ? (
           <meta name="robots" content="noindex, follow" />
         ) : null}
         <script type="application/ld+json">

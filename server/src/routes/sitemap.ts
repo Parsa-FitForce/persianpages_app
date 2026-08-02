@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import {
   isSeoEligibleBrowseSource,
+  MIN_INDEXABLE_BROWSE_LISTINGS,
   selectCanonicalListings,
 } from '../utils/seo.js';
 import { citySlugFromFa, countryCodeFromFa } from './meta.js';
@@ -181,6 +182,7 @@ async function getListingSitemapUrls(): Promise<SitemapUrl[]> {
       website: true,
       placeId: true,
       photos: true,
+      businessHours: true,
       isActive: true,
       isClaimed: true,
       phoneVerified: true,
@@ -211,6 +213,7 @@ async function getBrowseSitemapUrls(): Promise<SitemapUrl[]> {
       website: true,
       placeId: true,
       photos: true,
+      businessHours: true,
       isActive: true,
       isClaimed: true,
       phoneVerified: true,
@@ -263,6 +266,7 @@ async function getBrowseSitemapUrls(): Promise<SitemapUrl[]> {
   const urls: SitemapUrl[] = [];
 
   for (const [countryCode, stats] of countryPages) {
+    if (stats.count < MIN_INDEXABLE_BROWSE_LISTINGS) continue;
     urls.push({
       loc: `${SITE_URL}/browse/${countryCode}`,
       lastmod: stats.updatedAt,
@@ -270,7 +274,7 @@ async function getBrowseSitemapUrls(): Promise<SitemapUrl[]> {
   }
 
   for (const [key, stats] of countryCategoryPages) {
-    if (stats.count < 3) continue;
+    if (stats.count < MIN_INDEXABLE_BROWSE_LISTINGS) continue;
     const [countryCode, categorySlug] = key.split('|');
     urls.push({
       loc: `${SITE_URL}/browse/${countryCode}/category/${categorySlug}`,
@@ -279,7 +283,7 @@ async function getBrowseSitemapUrls(): Promise<SitemapUrl[]> {
   }
 
   for (const [key, stats] of cityPages) {
-    if (stats.count < 3) continue;
+    if (stats.count < MIN_INDEXABLE_BROWSE_LISTINGS) continue;
     const [countryCode, citySlug] = key.split('|');
     urls.push({
       loc: `${SITE_URL}/browse/${countryCode}/${citySlug}`,
@@ -288,7 +292,7 @@ async function getBrowseSitemapUrls(): Promise<SitemapUrl[]> {
   }
 
   for (const [key, stats] of cityCategoryPages) {
-    if (stats.count < 3) continue;
+    if (stats.count < MIN_INDEXABLE_BROWSE_LISTINGS) continue;
     const [countryCode, citySlug, categorySlug] = key.split('|');
     urls.push({
       loc: `${SITE_URL}/browse/${countryCode}/${citySlug}/${categorySlug}`,

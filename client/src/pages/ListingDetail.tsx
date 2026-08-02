@@ -11,6 +11,12 @@ import { getLocalBusinessSchema, getBreadcrumbSchema } from '../utils/structured
 import { resolveImageUrl } from '../utils/image';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 
+const MIN_INDEXABLE_LISTING_DESCRIPTION_LENGTH = 300;
+
+function hasBusinessHours(businessHours: Listing['businessHours']): boolean {
+  return Boolean(businessHours && Object.keys(businessHours).length > 0);
+}
+
 function PhotoGallery({ photos, title }: { photos: string[]; title: string }) {
   const [showAll, setShowAll] = useState(false);
 
@@ -158,6 +164,23 @@ export default function ListingDetail() {
   const isUnclaimed = !listing.isClaimed && listing.source === 'scraped';
   const listingTitle = `${listing.title} - ${listing.city}، ${listing.country} | پرشین‌پیجز`;
   const listingDescription = listing.description.slice(0, 160);
+  const isSeoIndexable = Boolean(
+    listing.isActive
+      && listing.slug
+      && listing.title.trim().length >= 3
+      && listing.description.trim().length >= MIN_INDEXABLE_LISTING_DESCRIPTION_LENGTH
+      && listing.address.trim()
+      && listing.city.trim()
+      && listing.country.trim()
+      && listing.phone
+      && listing.website
+      && (
+        listing.photos.length > 0
+        || hasBusinessHours(listing.businessHours)
+        || listing.isClaimed
+        || listing.phoneVerified
+      )
+  );
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-4 md:py-8">
@@ -165,6 +188,9 @@ export default function ListingDetail() {
         <title>{listingTitle}</title>
         <meta name="description" content={listingDescription} />
         <link rel="canonical" href={`https://persianpages.com/listing/${listing.slug || id}`} />
+        {!isSeoIndexable ? (
+          <meta name="robots" content="noindex, follow" />
+        ) : null}
         <meta property="og:title" content={listingTitle} />
         <meta property="og:description" content={listingDescription} />
         <meta property="og:type" content="business.business" />

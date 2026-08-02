@@ -10,6 +10,7 @@ type SeoListing = {
   website: string | null;
   placeId: string | null;
   photos: string[];
+  businessHours?: unknown;
   isActive: boolean;
   isClaimed: boolean;
   phoneVerified: boolean;
@@ -17,7 +18,8 @@ type SeoListing = {
   updatedAt: Date;
 };
 
-const MIN_DESCRIPTION_LENGTH = 120;
+export const MIN_INDEXABLE_LISTING_DESCRIPTION_LENGTH = 300;
+export const MIN_INDEXABLE_BROWSE_LISTINGS = 10;
 
 function normalize(value: string | null | undefined): string {
   return (value || '')
@@ -27,15 +29,27 @@ function normalize(value: string | null | undefined): string {
 }
 
 export function isSeoEligibleBrowseSource(listing: SeoListing): boolean {
+  const hasBusinessHours = Boolean(
+    listing.businessHours
+      && typeof listing.businessHours === 'object'
+      && Object.keys(listing.businessHours).length > 0
+  );
+  const hasRichSignal = listing.photos.length > 0
+    || hasBusinessHours
+    || listing.isClaimed
+    || listing.phoneVerified;
+
   return Boolean(
     listing.isActive
       && listing.slug
       && normalize(listing.title).length >= 3
-      && listing.description.trim().length >= MIN_DESCRIPTION_LENGTH
+      && listing.description.trim().length >= MIN_INDEXABLE_LISTING_DESCRIPTION_LENGTH
       && normalize(listing.address)
       && normalize(listing.city)
       && normalize(listing.country)
-      && (listing.phone || listing.website)
+      && listing.phone
+      && listing.website
+      && hasRichSignal
   );
 }
 
