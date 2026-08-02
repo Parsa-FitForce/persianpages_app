@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { Prisma, PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import {
   findCanonicalListing,
   isSeoEligibleBrowseSource,
@@ -369,9 +369,9 @@ type IndexableBrowseListing = BrowseListing & {
 type BreadcrumbItem = { label: string; href?: string };
 type NavLink = { label: string; href: string };
 
-async function getIndexableBrowseListings(where: Prisma.ListingWhereInput): Promise<IndexableBrowseListing[]> {
+async function getAllIndexableBrowseListings(): Promise<IndexableBrowseListing[]> {
   const listings = await prisma.listing.findMany({
-    where,
+    where: { isActive: true },
     select: {
       id: true,
       slug: true,
@@ -396,6 +396,10 @@ async function getIndexableBrowseListings(where: Prisma.ListingWhereInput): Prom
   });
 
   return selectCanonicalListings(listings, isSeoEligibleBrowseSource);
+}
+
+function listingMatchesCity(listing: IndexableBrowseListing, cityName: string): boolean {
+  return listing.city.toLocaleLowerCase().includes(cityName.toLocaleLowerCase());
 }
 
 function countIndexableFacets<T>(items: T[], keyFor: (item: T) => string | null): Map<string, number> {
@@ -721,8 +725,8 @@ router.get('/browse/:countryCode', async (req: Request, res: Response) => {
       return res.status(404).json(notFoundMeta(`/browse/${req.params.countryCode}`));
     }
 
-    const where = { country: country.name, isActive: true };
-    const indexableListings = await getIndexableBrowseListings(where);
+    const allIndexableListings = await getAllIndexableBrowseListings();
+    const indexableListings = allIndexableListings.filter((listing) => listing.country === country.name);
     const categoryNames = new Map(indexableListings.map((listing) => [listing.category.slug, listing.category.nameFa]));
     const categoryLinks: NavLink[] = indexableFacetEntries(
       countIndexableFacets(indexableListings, (listing) => listing.category.slug)
@@ -800,7 +804,8 @@ router.get('/browse/:countryCode/category/:categorySlug', async (req: Request, r
       return res.status(404).json(notFoundMeta(`/browse/${req.params.countryCode}/category/${req.params.categorySlug}`));
     }
 
-    const countryListings = await getIndexableBrowseListings({ country: country.name, isActive: true });
+    const allIndexableListings = await getAllIndexableBrowseListings();
+    const countryListings = allIndexableListings.filter((listing) => listing.country === country.name);
     const indexableListings = countryListings.filter((listing) => listing.category.slug === category.slug);
     const cityLinks: NavLink[] = indexableFacetEntries(
       countIndexableFacets(indexableListings, (listing) => citySlugFromFa(listing.city))
@@ -891,12 +896,10 @@ router.get('/browse/:countryCode/:citySlug/:categorySlug', async (req: Request, 
       return res.status(404).json(notFoundMeta(req.path.replace('/api/meta', '')));
     }
 
-    const cityWhere = {
-      country: country.name,
-      city: { contains: city.nameFa, mode: 'insensitive' as const },
-      isActive: true,
-    };
-    const cityListings = await getIndexableBrowseListings(cityWhere);
+    const allIndexableListings = await getAllIndexableBrowseListings();
+    const cityListings = allIndexableListings.filter(
+      (listing) => listing.country === country.name && listingMatchesCity(listing, city.nameFa)
+    );
     const indexableListings = cityListings.filter((listing) => listing.category.slug === category.slug);
     const categoryNames = new Map(cityListings.map((listing) => [listing.category.slug, listing.category.nameFa]));
     const otherCategoryLinks: NavLink[] = indexableFacetEntries(
@@ -981,12 +984,10 @@ router.get('/browse/:countryCode/:citySlug', async (req: Request, res: Response)
       return res.status(404).json(notFoundMeta(req.path.replace('/api/meta', '')));
     }
 
-    const where = {
-      country: country.name,
-      city: { contains: city.nameFa, mode: 'insensitive' as const },
-      isActive: true,
-    };
-    const indexableListings = await getIndexableBrowseListings(where);
+    const allIndexableListings = await getAllIndexableBrowseListings();
+    const indexableListings = allIndexableListings.filter(
+      (listing) => listing.country === country.name && listingMatchesCity(listing, city.nameFa)
+    );
     const categoryNames = new Map(indexableListings.map((listing) => [listing.category.slug, listing.category.nameFa]));
     const categoryLinks: NavLink[] = indexableFacetEntries(
       countIndexableFacets(indexableListings, (listing) => listing.category.slug)

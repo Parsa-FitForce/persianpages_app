@@ -96,8 +96,8 @@ router.get('/browse', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'کشور الزامی است' });
     }
 
-    const countryListings = await prisma.listing.findMany({
-      where: { country, isActive: true },
+    const allListings = await prisma.listing.findMany({
+      where: { isActive: true },
       include: {
         category: true,
         user: { select: { id: true, name: true } },
@@ -105,9 +105,9 @@ router.get('/browse', async (req: Request, res: Response) => {
       orderBy: { updatedAt: 'desc' },
     });
     const canonicalCountryListings = selectCanonicalListings(
-      countryListings,
+      allListings,
       isSeoEligibleBrowseSource
-    );
+    ).filter((listing) => listing.country === country);
     const cityMatches = (listingCity: string) => !city
       || listingCity.toLocaleLowerCase().includes(city.toLocaleLowerCase());
     const categoryMatches = (listingCategorySlug: string) => !categorySlug
@@ -133,7 +133,7 @@ router.get('/browse', async (req: Request, res: Response) => {
     }
 
     const selectedCategory = categorySlug
-      ? countryListings.find((listing) => listing.category.slug === categorySlug)?.category
+      ? allListings.find((listing) => listing.category.slug === categorySlug)?.category
       : undefined;
     const total = filteredListings.length;
     const start = (page - 1) * limit;
