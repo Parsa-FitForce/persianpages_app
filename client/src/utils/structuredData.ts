@@ -1,4 +1,68 @@
 import type { Listing } from '../types';
+import { resolveImageUrl } from './image';
+
+const SITE_URL = 'https://persianpages.com';
+
+const CATEGORY_SCHEMA_TYPES: Record<string, string> = {
+  restaurant: 'Restaurant',
+  grocery: 'GroceryStore',
+  medical: 'MedicalBusiness',
+  legal: 'LegalService',
+  'real-estate': 'RealEstateAgent',
+  automotive: 'AutomotiveBusiness',
+  beauty: 'HealthAndBeautyBusiness',
+  financial: 'FinancialService',
+};
+
+const DAY_SCHEMA_NAMES: Record<string, string> = {
+  monday: 'Monday',
+  tuesday: 'Tuesday',
+  wednesday: 'Wednesday',
+  thursday: 'Thursday',
+  friday: 'Friday',
+  saturday: 'Saturday',
+  sunday: 'Sunday',
+};
+
+function absoluteUrl(pathOrUrl: string): string {
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+  return `${SITE_URL}${pathOrUrl.startsWith('/') ? '' : '/'}${pathOrUrl}`;
+}
+
+function normalizeSocialUrl(network: string, value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  const handle = trimmed.replace(/^@/, '');
+  if (network === 'instagram') return `https://instagram.com/${handle}`;
+  if (network === 'facebook') return `https://facebook.com/${handle}`;
+  if (network === 'telegram') return `https://t.me/${handle}`;
+  if (network === 'whatsapp') return `https://wa.me/${handle.replace(/[^\d+]/g, '')}`;
+  if (network === 'youtube') return `https://youtube.com/${handle}`;
+  if (network === 'tiktok') return `https://tiktok.com/${handle}`;
+  return `https://${trimmed}`;
+}
+
+function openingHoursSpecification(businessHours: Listing['businessHours']) {
+  if (!businessHours) return undefined;
+
+  const specs = Object.entries(businessHours)
+    .map(([day, hours]) => {
+      const dayOfWeek = DAY_SCHEMA_NAMES[day.toLowerCase()];
+      if (!dayOfWeek || !hours || hours.toLowerCase() === 'closed') return null;
+      const [opens, closes] = hours.split(/\s*-\s*/);
+      if (!opens || !closes) return null;
+      return {
+        '@type': 'OpeningHoursSpecification',
+        dayOfWeek,
+        opens,
+        closes,
+      };
+    })
+    .filter(Boolean);
+
+  return specs.length > 0 ? specs : undefined;
+}
 
 export function getWebsiteSchema() {
   return {
@@ -20,11 +84,23 @@ export function getWebsiteSchema() {
 }
 
 export function getLocalBusinessSchema(listing: Listing) {
+  const listingUrl = absoluteUrl(`/listing/${listing.slug || listing.id}`);
+  const sameAs = [
+    listing.website,
+    ...Object.entries(listing.socialLinks || {})
+      .map(([network, value]) => value ? normalizeSocialUrl(network, value) : null),
+  ].filter((url): url is string => Boolean(url));
+  const openingHours = openingHoursSpecification(listing.businessHours);
+
   const schema: Record<string, unknown> = {
     '@context': 'https://schema.org',
-    '@type': 'LocalBusiness',
+    '@type': CATEGORY_SCHEMA_TYPES[listing.category.slug] || 'LocalBusiness',
+    '@id': `${listingUrl}#business`,
     name: listing.title,
     description: listing.description,
+    url: listingUrl,
+    mainEntityOfPage: listingUrl,
+    inLanguage: 'fa',
     address: {
       '@type': 'PostalAddress',
       streetAddress: listing.address,
@@ -45,18 +121,16 @@ export function getLocalBusinessSchema(listing: Listing) {
     schema.telephone = listing.phone;
   }
 
-  if (listing.website) {
-    schema.url = listing.website;
+  if (sameAs.length > 0) {
+    schema.sameAs = sameAs;
   }
 
   if (listing.photos.length > 0) {
-    schema.image = listing.photos;
+    schema.image = listing.photos.map(resolveImageUrl);
   }
 
-  if (listing.businessHours && Object.keys(listing.businessHours).length > 0) {
-    schema.openingHours = Object.entries(listing.businessHours).map(
-      ([day, hours]) => `${day} ${hours}`
-    );
+  if (openingHours) {
+    schema.openingHoursSpecification = openingHours;
   }
 
   return schema;

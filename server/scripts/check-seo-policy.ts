@@ -1,0 +1,67 @@
+import {
+  isSeoEligibleListing,
+  MIN_INDEXABLE_BROWSE_LISTINGS,
+  selectCanonicalListings,
+} from '../src/utils/seo.js';
+
+type TestListing = Parameters<typeof isSeoEligibleListing>[0];
+
+function listing(overrides: Partial<TestListing> = {}): TestListing {
+  return {
+    id: 'base',
+    slug: 'base-listing',
+    title: 'کسب‌وکار نمونه',
+    description: 'این یک توضیح کامل و اختصاصی برای یک کسب‌وکار ایرانی است که اطلاعات کافی درباره خدمات، موقعیت، راه‌های ارتباطی، تجربه مشتریان، دسته‌بندی، ویژگی‌های مهم و جزئیات قابل اعتماد ارائه می‌کند. این متن عمداً بلندتر از حداقل لازم نوشته شده تا صفحه به‌عنوان یک صفحه مستقل و مفید برای کاربران و موتورهای جستجو قابل ارزیابی باشد.',
+    address: '123 Main St',
+    city: 'لس‌آنجلس',
+    country: 'آمریکا',
+    phone: '+13105550100',
+    website: 'https://example.com',
+    placeId: 'place-base',
+    photos: ['https://example.com/photo.jpg'],
+    businessHours: { monday: '09:00 - 17:00' },
+    isActive: true,
+    isClaimed: false,
+    phoneVerified: false,
+    source: 'scraped',
+    updatedAt: new Date('2026-01-01T00:00:00Z'),
+    ...overrides,
+  };
+}
+
+function assert(condition: unknown, message: string) {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+assert(MIN_INDEXABLE_BROWSE_LISTINGS >= 10, 'Browse pages must require at least 10 strong canonical listings.');
+assert(isSeoEligibleListing(listing()), 'A rich listing with phone, website, description, and rich signals should be indexable.');
+assert(!isSeoEligibleListing(listing({ description: 'too short' })), 'Thin listing descriptions must not be indexable.');
+assert(!isSeoEligibleListing(listing({ website: null })), 'Listings without a website must not be indexable.');
+assert(!isSeoEligibleListing(listing({ phone: null })), 'Listings without a phone must not be indexable.');
+assert(!isSeoEligibleListing(listing({ photos: [], businessHours: null, isClaimed: false, phoneVerified: false })), 'Listings without any rich signal must not be indexable.');
+assert(!isSeoEligibleListing(listing({ isActive: false })), 'Inactive listings must not be indexable.');
+
+const weakerDuplicate = listing({
+  id: 'weaker',
+  slug: 'weaker-duplicate',
+  photos: ['https://example.com/one.jpg'],
+  updatedAt: new Date('2026-01-01T00:00:00Z'),
+});
+const strongerDuplicate = listing({
+  id: 'stronger',
+  slug: 'stronger-duplicate',
+  photos: [
+    'https://example.com/one.jpg',
+    'https://example.com/two.jpg',
+    'https://example.com/three.jpg',
+  ],
+  updatedAt: new Date('2026-01-02T00:00:00Z'),
+});
+const canonical = selectCanonicalListings([weakerDuplicate, strongerDuplicate]);
+
+assert(canonical.length === 1, 'Duplicate listings should collapse to one canonical listing.');
+assert(canonical[0]?.id === 'stronger', 'The richer duplicate should win canonical selection.');
+
+console.log('SEO policy check passed.');

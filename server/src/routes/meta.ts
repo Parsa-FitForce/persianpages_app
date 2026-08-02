@@ -198,6 +198,148 @@ function esc(s: string | null | undefined): string {
     .replace(/'/g, '&#39;');
 }
 
+const CATEGORY_SCHEMA_TYPES: Record<string, string> = {
+  restaurant: 'Restaurant',
+  grocery: 'GroceryStore',
+  medical: 'MedicalBusiness',
+  legal: 'LegalService',
+  'real-estate': 'RealEstateAgent',
+  automotive: 'AutomotiveBusiness',
+  beauty: 'HealthAndBeautyBusiness',
+  financial: 'FinancialService',
+};
+
+const DAY_SCHEMA_NAMES: Record<string, string> = {
+  monday: 'Monday',
+  tuesday: 'Tuesday',
+  wednesday: 'Wednesday',
+  thursday: 'Thursday',
+  friday: 'Friday',
+  saturday: 'Saturday',
+  sunday: 'Sunday',
+};
+
+function absoluteUrl(pathOrUrl: string): string {
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+  return `${SITE_URL}${pathOrUrl.startsWith('/') ? '' : '/'}${pathOrUrl}`;
+}
+
+function normalizeSocialUrl(network: string, value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  const handle = trimmed.replace(/^@/, '');
+  if (network === 'instagram') return `https://instagram.com/${handle}`;
+  if (network === 'facebook') return `https://facebook.com/${handle}`;
+  if (network === 'telegram') return `https://t.me/${handle}`;
+  if (network === 'whatsapp') return `https://wa.me/${handle.replace(/[^\d+]/g, '')}`;
+  if (network === 'youtube') return `https://youtube.com/${handle}`;
+  if (network === 'tiktok') return `https://tiktok.com/${handle}`;
+  return `https://${trimmed}`;
+}
+
+function sameAsUrls(website: string | null, socialLinks: unknown): string[] {
+  const urls = new Set<string>();
+  if (website) urls.add(website);
+  if (socialLinks && typeof socialLinks === 'object') {
+    for (const [network, value] of Object.entries(socialLinks as Record<string, unknown>)) {
+      if (typeof value !== 'string') continue;
+      const url = normalizeSocialUrl(network.toLowerCase(), value);
+      if (url) urls.add(url);
+    }
+  }
+  return [...urls];
+}
+
+type OpeningHoursSpec = {
+  '@type': 'OpeningHoursSpecification';
+  dayOfWeek: string;
+  opens: string;
+  closes: string;
+};
+
+function openingHoursSpecification(hours: unknown): OpeningHoursSpec[] | undefined {
+  if (!hours || typeof hours !== 'object') return undefined;
+  const specs = Object.entries(hours as Record<string, unknown>)
+    .map(([day, value]) => {
+      const dayOfWeek = DAY_SCHEMA_NAMES[day.toLowerCase()];
+      if (!dayOfWeek || value === undefined || value === null || value === false || value === 'closed') {
+        return null;
+      }
+
+      let display: string | null = null;
+      if (typeof value === 'string') {
+        display = value;
+      } else if (typeof value === 'object') {
+        const v = value as { open?: string; close?: string };
+        if (v.open && v.close) display = `${v.open} - ${v.close}`;
+      }
+      if (!display) return null;
+
+      const [opens, closes] = display.split(/\s*-\s*/);
+      if (!opens || !closes) return null;
+      return {
+        '@type': 'OpeningHoursSpecification',
+        dayOfWeek,
+        opens,
+        closes,
+      };
+    })
+    .filter((spec): spec is OpeningHoursSpec => spec !== null);
+
+  return specs.length > 0 ? specs : undefined;
+}
+
+function localBusinessJsonLd(listing: {
+  id: string;
+  slug: string | null;
+  title: string;
+  description: string;
+  address: string;
+  city: string;
+  country: string;
+  phone: string | null;
+  website: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  photos: string[];
+  socialLinks: unknown;
+  businessHours: unknown;
+  category: { slug: string };
+}) {
+  const pageUrl = absoluteUrl(`/listing/${listing.slug || listing.id}`);
+  const sameAs = sameAsUrls(listing.website, listing.socialLinks);
+  const openingHours = openingHoursSpecification(listing.businessHours);
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': CATEGORY_SCHEMA_TYPES[listing.category.slug] || 'LocalBusiness',
+    '@id': `${pageUrl}#business`,
+    name: listing.title,
+    description: listing.description,
+    image: listing.photos.length > 0 ? listing.photos : DEFAULT_IMAGE,
+    url: pageUrl,
+    mainEntityOfPage: pageUrl,
+    inLanguage: 'fa',
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: listing.address,
+      addressLocality: listing.city,
+      addressCountry: listing.country,
+    },
+    ...(listing.phone && { telephone: listing.phone }),
+    ...(listing.latitude && listing.longitude && {
+      geo: {
+        '@type': 'GeoCoordinates',
+        latitude: listing.latitude,
+        longitude: listing.longitude,
+      },
+    }),
+    ...(sameAs.length > 0 && { sameAs }),
+    ...(openingHours && { openingHoursSpecification: openingHours }),
+  };
+}
+
 type BrowseListing = {
   slug: string | null;
   id: string;
@@ -394,7 +536,10 @@ function renderListingBody(opts: {
     photos: string[];
     socialLinks: unknown;
     businessHours: unknown;
-    category: { nameFa: string };
+    isClaimed: boolean;
+    phoneVerified: boolean;
+    updatedAt: Date;
+    category: { nameFa: string; slug: string };
   };
   breadcrumbs: BreadcrumbItem[];
   exploreLinks: NavLink[];
@@ -405,11 +550,28 @@ function renderListingBody(opts: {
   parts.push(`<h1>${esc(listing.title)}</h1>`);
   parts.push(`<p><strong>${esc(listing.category.nameFa)}</strong> در ${esc(listing.city)}، ${esc(listing.country)}</p>`);
   if (listing.photos.length > 0) {
-    parts.push(`<figure><img src="${esc(listing.photos[0])}" alt="${esc(listing.title)}" loading="lazy" /></figure>`);
+    const images = listing.photos
+      .slice(0, 3)
+      .map((photo, i) => `<figure><img src="${esc(photo)}" alt="${esc(`${listing.title} - عکس ${i + 1}`)}" loading="lazy" /></figure>`)
+      .join('');
+    parts.push(`<section><h2>عکس‌های ${esc(listing.title)}</h2>${images}</section>`);
   }
   if (listing.description) {
     parts.push(`<section><h2>درباره ${esc(listing.title)}</h2><p>${esc(listing.description)}</p></section>`);
   }
+
+  const qualitySignals = [
+    listing.isClaimed ? 'مالکیت این کسب‌وکار در پرشین‌پیجز ثبت شده است.' : '',
+    listing.phoneVerified ? 'شماره تماس این کسب‌وکار تأیید شده است.' : '',
+    listing.photos.length > 0 ? `${listing.photos.length} عکس برای این کسب‌وکار ثبت شده است.` : '',
+    listing.businessHours && typeof listing.businessHours === 'object' && Object.keys(listing.businessHours).length > 0
+      ? 'ساعات کاری در این صفحه موجود است.'
+      : '',
+  ].filter(Boolean);
+  parts.push(`<section><h2>اطلاعات صفحه</h2><p>در این صفحه می‌توانید اطلاعات تماس، آدرس، وب‌سایت، دسته‌بندی و جزئیات ${esc(listing.title)} را در پرشین‌پیجز ببینید.</p>${
+    qualitySignals.length > 0 ? `<ul>${qualitySignals.map((signal) => `<li>${esc(signal)}</li>`).join('')}</ul>` : ''
+  }<p>آخرین به‌روزرسانی: ${esc(listing.updatedAt.toISOString().split('T')[0])}</p></section>`);
+
   const contactBits: string[] = [];
   contactBits.push(`<address><p>${esc(listing.address)}</p><p>${esc(listing.city)}، ${esc(listing.country)}</p></address>`);
   if (listing.phone) contactBits.push(`<p>تلفن: <a href="tel:${esc(listing.phone)}">${esc(listing.phone)}</a></p>`);
@@ -983,29 +1145,7 @@ router.get('/:type/:id', async (req: Request, res: Response) => {
         noindex: !isIndexable,
         bodyHtml,
         jsonLd: [
-          {
-            '@context': 'https://schema.org',
-            '@type': 'LocalBusiness',
-            name: listing.title,
-            description: listing.description,
-            image,
-            url,
-            address: {
-              '@type': 'PostalAddress',
-              streetAddress: listing.address,
-              addressLocality: listing.city,
-              addressCountry: listing.country,
-            },
-            ...(listing.phone && { telephone: listing.phone }),
-            ...(listing.latitude && listing.longitude && {
-              geo: {
-                '@type': 'GeoCoordinates',
-                latitude: listing.latitude,
-                longitude: listing.longitude,
-              },
-            }),
-            ...(listing.website && { sameAs: listing.website }),
-          },
+          localBusinessJsonLd(listing),
           breadcrumbJsonLd(breadcrumbs.map((b, i) => ({ ...b, href: i === breadcrumbs.length - 1 ? url : b.href }))),
         ],
       });
