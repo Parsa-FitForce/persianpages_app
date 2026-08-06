@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite --host",
     "build": "tsc && vite build",
+    "structured-data:check": "node scripts/check-business-hours.mjs",
     "seo:check": "node scripts/check-seo-shell.mjs",
     "preview": "vite preview"
   },

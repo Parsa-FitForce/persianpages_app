@@ -1,4 +1,5 @@
 import type { Listing } from '../types';
+import { openingHoursSpecification } from './businessHours';
 import { resolveImageUrl } from './image';
 
 const SITE_URL = 'https://persianpages.com';
@@ -12,16 +13,6 @@ const CATEGORY_SCHEMA_TYPES: Record<string, string> = {
   automotive: 'AutomotiveBusiness',
   beauty: 'HealthAndBeautyBusiness',
   financial: 'FinancialService',
-};
-
-const DAY_SCHEMA_NAMES: Record<string, string> = {
-  monday: 'Monday',
-  tuesday: 'Tuesday',
-  wednesday: 'Wednesday',
-  thursday: 'Thursday',
-  friday: 'Friday',
-  saturday: 'Saturday',
-  sunday: 'Sunday',
 };
 
 function absoluteUrl(pathOrUrl: string): string {
@@ -41,27 +32,6 @@ function normalizeSocialUrl(network: string, value: string): string | null {
   if (network === 'youtube') return `https://youtube.com/${handle}`;
   if (network === 'tiktok') return `https://tiktok.com/${handle}`;
   return `https://${trimmed}`;
-}
-
-function openingHoursSpecification(businessHours: Listing['businessHours']) {
-  if (!businessHours) return undefined;
-
-  const specs = Object.entries(businessHours)
-    .map(([day, hours]) => {
-      const dayOfWeek = DAY_SCHEMA_NAMES[day.toLowerCase()];
-      if (!dayOfWeek || !hours || hours.toLowerCase() === 'closed') return null;
-      const [opens, closes] = hours.split(/\s*-\s*/);
-      if (!opens || !closes) return null;
-      return {
-        '@type': 'OpeningHoursSpecification',
-        dayOfWeek,
-        opens,
-        closes,
-      };
-    })
-    .filter(Boolean);
-
-  return specs.length > 0 ? specs : undefined;
 }
 
 export function getWebsiteSchema() {

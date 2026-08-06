@@ -37,7 +37,7 @@ export interface Listing {
     tiktok?: string;
   };
   businessHours?: {
-    [key: string]: string;
+    [key: string]: string | { open?: string; close?: string } | null | false;
   };
   photos: string[];
   phoneVerified?: boolean;
