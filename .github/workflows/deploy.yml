@@ -127,7 +127,7 @@ jobs:
         env:
           VITE_API_URL: ${{ secrets.API_URL }}
           VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
-          VITE_SUPPORT_URL: https://support.persianpages.com
+          VITE_SUPPORT_URL: https://api.persianpages.com
         run: npm run build
 
       - name: SEO shell check

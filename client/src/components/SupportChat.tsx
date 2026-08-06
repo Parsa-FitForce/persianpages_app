@@ -31,6 +31,9 @@ const STRINGS = {
     waiting: 'Waiting for messages...',
     typePlaceholder: 'Type a message...',
     helpPlaceholder: 'How can we help?',
+    sendError: "Your message couldn't be sent. Please try again.",
+    sendLabel: 'Send message',
+    sendingLabel: 'Sending message',
   },
   fa: {
     header: '\u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC',
@@ -42,6 +45,9 @@ const STRINGS = {
     waiting: '\u062F\u0631 \u0627\u0646\u062A\u0638\u0627\u0631 \u067E\u06CC\u0627\u0645...',
     typePlaceholder: '\u067E\u06CC\u0627\u0645 \u062E\u0648\u062F \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F...',
     helpPlaceholder: '\u0686\u0637\u0648\u0631 \u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u06CC\u0645 \u06A9\u0645\u06A9\u062A\u0627\u0646 \u06A9\u0646\u06CC\u0645\u061F',
+    sendError: '\u067E\u06CC\u0627\u0645 \u0634\u0645\u0627 \u0627\u0631\u0633\u0627\u0644 \u0646\u0634\u062F. \u0644\u0637\u0641\u0627\u064B \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F.',
+    sendLabel: '\u0627\u0631\u0633\u0627\u0644 \u067E\u06CC\u0627\u0645',
+    sendingLabel: '\u062F\u0631 \u062D\u0627\u0644 \u0627\u0631\u0633\u0627\u0644 \u067E\u06CC\u0627\u0645',
   },
 };
 
@@ -92,6 +98,7 @@ export default function SupportChat({
     localStorage.getItem(`support_conversation_${appId}`)
   );
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
   const [started, setStarted] = useState(!!conversationId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -145,6 +152,7 @@ export default function SupportChat({
   const startConversation = async () => {
     if (!name.trim() || !email.trim() || !input.trim()) return;
     setSending(true);
+    setSendError('');
     try {
       const res = await fetch(`${supportUrl}/api/conversations`, {
         method: 'POST',
@@ -165,6 +173,7 @@ export default function SupportChat({
       setInput('');
     } catch (error) {
       console.error('Failed to start conversation:', error);
+      setSendError(t.sendError);
     } finally {
       setSending(false);
     }
@@ -173,6 +182,7 @@ export default function SupportChat({
   const sendMessage = async () => {
     if (!input.trim() || !conversationId) return;
     setSending(true);
+    setSendError('');
     const content = input.trim();
     setInput('');
 
@@ -201,6 +211,7 @@ export default function SupportChat({
       // Remove optimistic on failure
       setMessages(prev => prev.filter(m => m.id !== optimistic.id));
       setInput(content);
+      setSendError(t.sendError);
     } finally {
       setSending(false);
     }
@@ -219,6 +230,7 @@ export default function SupportChat({
     setConversationId(null);
     setMessages([]);
     setStarted(false);
+    setSendError('');
   };
 
   return (
@@ -323,13 +335,17 @@ export default function SupportChat({
               <textarea
                 dir={isRtl ? 'rtl' : undefined}
                 value={input}
-                onChange={e => setInput(e.target.value)}
+                onChange={e => {
+                  setInput(e.target.value);
+                  if (sendError) setSendError('');
+                }}
                 onKeyDown={handleKeyDown}
                 placeholder={started ? t.typePlaceholder : t.helpPlaceholder}
                 rows={1}
                 className="flex-1 px-3 py-2 text-sm rounded-lg border border-stone-300 dark:border-stone-600 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 max-h-24"
               />
               <button
+                aria-label={sending ? t.sendingLabel : t.sendLabel}
                 onClick={started ? sendMessage : startConversation}
                 disabled={sending || !input.trim() || (!started && (!name.trim() || !email.trim()))}
                 className={`p-2 rounded-lg ${theme.primary} ${theme.primaryHover} ${theme.text} disabled:opacity-50 disabled:cursor-not-allowed transition-colors`}
@@ -337,6 +353,11 @@ export default function SupportChat({
                 <SendIcon className="w-5 h-5" rtl={isRtl} />
               </button>
             </div>
+            {sendError && (
+              <p className="mt-2 text-xs text-red-600 dark:text-red-400" role="alert" aria-live="polite">
+                {sendError}
+              </p>
+            )}
           </div>
         </div>
       )}
