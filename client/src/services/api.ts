@@ -70,6 +70,11 @@ export const listingsApi = {
     limit?: number;
   }) => api.get<BrowseListingsResponse>('/listings/browse', { params }),
 
+  getFeatured: (params?: {
+    country?: string;
+    limit?: number;
+  }) => api.get<ListingsResponse>('/listings/featured', { params }),
+
   getOne: (id: string) => api.get<Listing>(`/listings/${id}`),
 
   getMine: () => api.get<Listing[]>('/listings/user/me'),

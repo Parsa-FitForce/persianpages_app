@@ -124,6 +124,10 @@ assert(
   medicalBrowseContent.intro.includes('انتاریو'),
   'Priority city/category pages should use hand-written local editorial copy.'
 );
+assert(
+  MIN_INDEXABLE_BROWSE_LISTINGS === 10,
+  'Homepage guide links and browse sitemaps must share the same eligibility threshold.'
+);
 const genericBrowseContent = buildBrowsePageContent({
   countryName: 'ژاپن',
   cityName: 'اوساکا',

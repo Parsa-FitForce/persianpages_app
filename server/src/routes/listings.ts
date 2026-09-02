@@ -172,6 +172,42 @@ router.get('/browse', async (req: Request, res: Response) => {
   }
 });
 
+// Strong canonical listings for homepage discovery. Keep this route aligned
+// with the listing sitemap so the homepage never promotes thin or duplicate
+// URLs to users or search engines.
+router.get('/featured', async (req: Request, res: Response) => {
+  try {
+    const country = typeof req.query.country === 'string' ? req.query.country.trim() : '';
+    const limit = Math.min(12, Math.max(1, Number.parseInt(String(req.query.limit || '12'), 10) || 12));
+    const allListings = await prisma.listing.findMany({
+      where: { isActive: true },
+      include: {
+        category: true,
+        user: { select: { id: true, name: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+    const canonicalListings = selectCanonicalListings(
+      allListings,
+      isSeoEligibleBrowseSource
+    ).filter((listing) => !country || listing.country === country);
+
+    res.set('Cache-Control', 'public, max-age=300');
+    return res.json({
+      listings: canonicalListings.slice(0, limit),
+      pagination: {
+        page: 1,
+        limit,
+        total: canonicalListings.length,
+        pages: Math.ceil(canonicalListings.length / limit),
+      },
+    });
+  } catch (error) {
+    console.error('Get featured listings error:', error);
+    return res.status(500).json({ error: 'خطا در دریافت کسب‌وکارهای منتخب' });
+  }
+});
+
 // Get single listing (by slug or id)
 router.get('/:idOrSlug', async (req: Request, res: Response) => {
   try {

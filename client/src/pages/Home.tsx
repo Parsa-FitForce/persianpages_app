@@ -8,7 +8,24 @@ import CategoryCard from '../components/CategoryCard';
 import ListingCard from '../components/ListingCard';
 import { getWebsiteSchema } from '../utils/structuredData';
 
-const POPULAR_COUNTRY_CODES = ['us', 'ca', 'gb', 'ae', 'it', 'es', 'de', 'se'];
+// These country hubs currently satisfy the same minimum-quality threshold as
+// the browse sitemap. Avoid promoting thin/noindexed browse routes from home.
+const POPULAR_COUNTRY_CODES = ['us', 'ca', 'ae', 'gb', 'se', 'es', 'it'];
+
+const PRIORITY_BROWSE_LINKS = [
+  { href: '/browse/us/los-angeles/medical', label: 'پزشکان ایرانی در لس‌آنجلس' },
+  { href: '/browse/ca/toronto/medical', label: 'پزشکان ایرانی در تورنتو' },
+  { href: '/browse/ca/toronto/legal', label: 'وکلای ایرانی در تورنتو' },
+  { href: '/browse/ca/vancouver/medical', label: 'پزشکان ایرانی در ونکوور' },
+  { href: '/browse/ca/toronto/grocery', label: 'سوپرمارکت‌های ایرانی در تورنتو' },
+  { href: '/browse/ae/dubai/medical', label: 'پزشکان ایرانی در دبی' },
+  { href: '/browse/gb/london/restaurant', label: 'رستوران‌های ایرانی در لندن' },
+  { href: '/browse/se/stockholm/restaurant', label: 'رستوران‌های ایرانی در استکهلم' },
+  { href: '/browse/us/new-york/restaurant', label: 'رستوران‌های ایرانی در نیویورک' },
+  { href: '/browse/us/new-york/legal', label: 'وکلای ایرانی در نیویورک' },
+  { href: '/browse/us/seattle/medical', label: 'پزشکان ایرانی در سیاتل' },
+  { href: '/browse/us/woodland-hills/restaurant', label: 'رستوران‌های ایرانی در وودلند هیلز' },
+];
 
 export default function Home() {
   const [search, setSearch] = useState('');
@@ -30,7 +47,7 @@ export default function Home() {
 
     Promise.all([
       categoriesApi.getAll(),
-      listingsApi.getAll({ limit: 6, country: countryFilter }),
+      listingsApi.getFeatured({ limit: 12, country: countryFilter }),
     ])
       .then(([catRes, listRes]) => {
         setCategories(catRes.data);
@@ -150,7 +167,7 @@ export default function Home() {
 
       {!selectedCountry && (
         <section className="border-y border-gray-200 bg-white">
-          <div className="max-w-7xl mx-auto px-4 py-6 md:py-8">
+          <div className="max-w-7xl mx-auto px-4 py-6 md:py-10 space-y-8">
             <div className="flex items-end justify-between gap-4 mb-4">
               <div>
                 <h2 className="text-lg md:text-2xl font-bold">کشورهای پربازدید</h2>
@@ -176,15 +193,34 @@ export default function Home() {
                 );
               })}
             </nav>
+
+            <div>
+              <div className="mb-4">
+                <h2 className="text-lg md:text-2xl font-bold">راهنماهای محبوب شهر و تخصص</h2>
+                <p className="text-sm text-gray-500 mt-1">مسیرهای مستقیم به فهرست‌های کامل و به‌روز پرشین‌پیجز</p>
+              </div>
+              <nav aria-label="راهنماهای محبوب" className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {PRIORITY_BROWSE_LINKS.map((item) => (
+                  <Link
+                    key={item.href}
+                    to={item.href}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 hover:border-primary-300 hover:text-primary-700 transition-colors"
+                  >
+                    <span>{item.label}</span>
+                    <span aria-hidden="true" className="text-primary-500">←</span>
+                  </Link>
+                ))}
+              </nav>
+            </div>
           </div>
         </section>
       )}
 
-      {/* Recent Listings */}
+      {/* Featured indexable listings */}
       <section className="max-w-7xl mx-auto px-4 pb-8 md:pb-16">
         <div className="flex justify-between items-center mb-4 md:mb-6">
           <h2 className="text-lg md:text-2xl font-bold">
-            {selectedCountry ? `کسب‌وکارهای ${selectedCountry.name}` : 'کسب‌وکارهای اخیر'}
+            {selectedCountry ? `کسب‌وکارهای منتخب ${selectedCountry.name}` : 'کسب‌وکارهای منتخب'}
           </h2>
           <button
             onClick={() => navigate(countryCode ? `/search?country=${countryCode}` : '/search')}

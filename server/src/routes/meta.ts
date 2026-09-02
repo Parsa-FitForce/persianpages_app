@@ -660,7 +660,7 @@ router.get('/home', async (_req: Request, res: Response) => {
         phoneVerified: true,
         source: true,
         updatedAt: true,
-        category: { select: { nameFa: true } },
+        category: { select: { nameFa: true, slug: true } },
       },
       orderBy: { updatedAt: 'desc' },
     });
@@ -668,12 +668,25 @@ router.get('/home', async (_req: Request, res: Response) => {
       listings,
       isSeoEligibleBrowseSource
     );
-    const recentListings = canonicalListings.slice(0, 6);
+    const recentListings = canonicalListings.slice(0, 12);
     const countryCounts = new Map<string, number>();
+    const cityCategoryCounts = new Map<string, { count: number; label: string; href: string }>();
     for (const listing of canonicalListings) {
       countryCounts.set(listing.country, (countryCounts.get(listing.country) || 0) + 1);
+      const countryCode = countryCodeFromFa(listing.country);
+      const citySlug = citySlugFromFa(listing.city);
+      if (countryCode && citySlug) {
+        const key = `${countryCode}|${citySlug}|${listing.category.slug}`;
+        const current = cityCategoryCounts.get(key);
+        cityCategoryCounts.set(key, {
+          count: (current?.count || 0) + 1,
+          label: `${listing.category.nameFa} ایرانی در ${listing.city}`,
+          href: `/browse/${countryCode}/${citySlug}/${listing.category.slug}`,
+        });
+      }
     }
     const countryLinks = [...countryCounts.entries()]
+      .filter(([, count]) => count >= MIN_INDEXABLE_BROWSE_LISTINGS)
       .map(([country, count]) => {
         const code = countryCodeFromFa(country);
         return code ? { label: `${country} (${count})`, href: `/browse/${code}` } : null;
@@ -681,6 +694,11 @@ router.get('/home', async (_req: Request, res: Response) => {
       .filter((link): link is NavLink => link !== null)
       .sort((a, b) => Number(b.label.match(/\((\d+)\)/)?.[1] || 0) - Number(a.label.match(/\((\d+)\)/)?.[1] || 0))
       .slice(0, 10);
+    const priorityBrowseLinks = [...cityCategoryCounts.values()]
+      .filter(({ count }) => count >= MIN_INDEXABLE_BROWSE_LISTINGS)
+      .sort((a, b) => b.count - a.count || a.href.localeCompare(b.href))
+      .slice(0, 16)
+      .map(({ count, label, href }) => ({ label: `${label} (${count})`, href }));
 
     const title = 'پرشین‌پیجز - راهنمای کسب‌وکارهای ایرانی در سراسر جهان';
     const description = 'راهنمای جامع کسب‌وکارهای ایرانی در سراسر جهان. رستوران، پزشک، وکیل، سوپرمارکت و خدمات ایرانی را پیدا کنید.';
@@ -693,7 +711,10 @@ router.get('/home', async (_req: Request, res: Response) => {
       content,
       listings: recentListings,
       totalCount: canonicalListings.length,
-      navSections: [{ heading: 'کشورهای پربازدید', links: countryLinks }],
+      navSections: [
+        { heading: 'کشورهای پربازدید', links: countryLinks },
+        { heading: 'راهنماهای محبوب شهر و تخصص', links: priorityBrowseLinks },
+      ],
     });
 
     res.json({
