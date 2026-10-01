@@ -190,13 +190,17 @@ update_ecs() {
     cd "$TERRAFORM_DIR"
     CLUSTER=$(terraform output -raw ecs_cluster_name 2>/dev/null || echo "")
     SERVICE=$(terraform output -raw ecs_service_name 2>/dev/null || echo "")
+    ECR_URL=$(terraform output -raw ecr_repository_url 2>/dev/null || echo "")
 
-    if [ -z "$CLUSTER" ] || [ -z "$SERVICE" ]; then
-        log_error "ECS cluster/service not found. Run terraform apply first."
+    if [ -z "$CLUSTER" ] || [ -z "$SERVICE" ] || [ -z "$ECR_URL" ]; then
+        log_error "ECS cluster/service or ECR repository not found. Run terraform apply first."
         exit 1
     fi
 
-    aws ecs update-service --cluster $CLUSTER --service $SERVICE --force-new-deployment
+    # Derive the deployment region from the ECR repository instead of relying on
+    # the operator's AWS CLI default region, which may point somewhere else.
+    AWS_REGION=$(echo "$ECR_URL" | cut -d. -f4)
+    aws ecs update-service --region "$AWS_REGION" --cluster "$CLUSTER" --service "$SERVICE" --force-new-deployment
 
     log_info "ECS service update triggered. Use 'aws ecs wait services-stable --cluster $CLUSTER --services $SERVICE' to wait for deployment."
 }
