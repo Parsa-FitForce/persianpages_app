@@ -5,9 +5,25 @@ import { categoriesApi, listingsApi } from '../services/api';
 import type { BrowsePageContent, Category, Listing } from '../types';
 import { getCountryByCode, getCitiesByCountry, getCityBySlug, toSlug } from '../i18n/locations';
 import ListingCard from '../components/ListingCard';
-import { getCollectionPageSchema } from '../utils/structuredData';
+import { getCollectionPageSchema, getItemListSchema } from '../utils/structuredData';
 
-const MIN_INDEXABLE_BROWSE_LISTINGS = 10;
+const MIN_INDEXABLE_BROWSE_LISTINGS = 25;
+const CATEGORY_ENGLISH_LABELS: Record<string, string> = {
+  restaurant: 'restaurants',
+  grocery: 'grocery stores',
+  medical: 'healthcare providers',
+  legal: 'legal services',
+  'real-estate': 'real estate professionals',
+  automotive: 'automotive services',
+  beauty: 'beauty services',
+  financial: 'financial services',
+  education: 'education services',
+  services: 'local services',
+};
+
+function englishCountryName(name: string): string {
+  return ['United States', 'United Kingdom', 'UAE'].includes(name) ? `the ${name}` : name;
+}
 
 export default function BrowsePage() {
   const { countryCode = '', citySlug, categorySlug } = useParams<{
@@ -127,14 +143,26 @@ export default function BrowsePage() {
     : selectedCategory
       ? `${selectedCategory.nameFa} در ${country?.name || ''}`
       : country?.name || '';
+  const englishCategory = selectedCategory
+    ? CATEGORY_ENGLISH_LABELS[selectedCategory.slug] || selectedCategory.name.toLowerCase()
+    : '';
+  const englishHeading = resolvedCity
+    ? selectedCategory
+      ? `Iranian ${englishCategory} in ${resolvedCity.nameEn}`
+      : `Iranian businesses in ${resolvedCity.nameEn}`
+    : selectedCategory
+      ? `Iranian ${englishCategory} in ${country ? englishCountryName(country.nameEn) : ''}`
+      : `Iranian businesses in ${country ? englishCountryName(country.nameEn) : ''}`;
   const visibleCategorySlugs = new Set(categoryFacets.map((facet) => facet.slug));
   const visibleCategories = categories.filter(
     (category) => visibleCategorySlugs.has(category.slug) || category.slug === resolvedCategorySlug
   );
+  const categoryCountBySlug = new Map(categoryFacets.map((facet) => [facet.slug, facet.count]));
   const visibleCityNames = new Set(cityFacets.map((facet) => facet.name));
   const visibleCities = countryCities.filter(
     (candidate) => visibleCityNames.has(candidate.name) || candidate.name === resolvedCity?.name
   );
+  const cityCountByName = new Map(cityFacets.map((facet) => [facet.name, facet.count]));
 
   if (invalidLocation || invalidCategory) {
     return (
@@ -170,33 +198,49 @@ export default function BrowsePage() {
         <script type="application/ld+json">
           {JSON.stringify(getCollectionPageSchema({
             name: pageTitle,
+            alternateName: englishHeading,
             description: pageDescription,
             url: canonicalUrl,
           }))}
         </script>
+        {!loading && listings.length > 0 ? (
+          <script type="application/ld+json">
+            {JSON.stringify(getItemListSchema(canonicalUrl, listings))}
+          </script>
+        ) : null}
       </Helmet>
 
-      {/* Header */}
-      <div className="bg-gradient-to-l from-primary-600 to-primary-700 text-white py-4 md:py-8">
-        <div className="max-w-5xl mx-auto px-4">
-          <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
-            {country && <span className="text-2xl md:text-3xl">{country.flag}</span>}
-            <h1 className="text-lg md:text-2xl font-bold">{heading}</h1>
+      <section className="atlas-grid bg-ink text-white">
+        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 md:py-14 lg:px-8">
+          <nav className="mb-6 flex flex-wrap items-center gap-2 text-xs text-slate-300" aria-label="مسیر صفحه">
+            <Link to="/" className="hover:text-white">پرشین‌پیجز</Link><span aria-hidden="true">/</span>
+            {country && <>{resolvedCity || selectedCategory ? <Link to={`/browse/${countryCode}`} className="hover:text-white">{country.name}</Link> : <span>{country.name}</span>}</>}
+            {resolvedCity && <><span aria-hidden="true">/</span>{selectedCategory ? <Link to={`/browse/${countryCode}/${citySlug}`} className="hover:text-white">{resolvedCity.name}</Link> : <span>{resolvedCity.name}</span>}</>}
+            {selectedCategory && <><span aria-hidden="true">/</span><span>{selectedCategory.nameFa}</span></>}
+          </nav>
+          <div className="grid gap-6 md:grid-cols-[1fr_auto] md:items-end">
+            <div>
+              <div className="mb-3 flex items-center gap-3">{country && <span className="text-3xl" aria-hidden="true">{country.flag}</span>}<span className="rounded-lg bg-white/10 px-2.5 py-1 text-sm font-bold text-primary-100">{loading ? '…' : total.toLocaleString('fa-IR')} نتیجه</span></div>
+              <h1 className="text-balance text-3xl font-black leading-tight md:text-5xl">{heading}</h1>
+              <p lang="en" dir="ltr" className="mt-2 w-fit font-latin text-sm font-semibold text-primary-200">{englishHeading}</p>
+              {!loading && browseContent && <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300 md:text-base">{browseContent.intro}</p>}
+            </div>
+            <Link to="/search" className="inline-flex w-fit rounded-xl bg-white px-4 py-3 text-sm font-bold text-ink hover:bg-primary-50">جستجو در همه فهرست‌ها</Link>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="max-w-5xl mx-auto px-4 py-4 md:py-6">
+      <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 md:py-10 lg:px-8">
         {/* Category Pills */}
-        <div className="mb-4 md:mb-6">
-          <h3 className="text-sm font-medium text-gray-500 mb-2 md:mb-3">دسته‌بندی</h3>
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
+          <h2 className="mb-3 text-sm font-bold text-ink">محدود کردن بر اساس دسته</h2>
           <div className="flex md:flex-wrap gap-2 overflow-x-auto pb-1 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide">
             <Link
               to={resolvedCity ? `/browse/${countryCode}/${citySlug}` : `/browse/${countryCode}`}
               className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap shrink-0 ${
                 !resolvedCategorySlug
-                  ? 'bg-primary-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-ink text-white'
+                  : 'bg-slate-100 text-slate-700 hover:bg-primary-50 hover:text-primary-800'
               }`}
             >
               همه
@@ -211,12 +255,13 @@ export default function BrowsePage() {
                   to={catUrl}
                   className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                     resolvedCategorySlug === cat.slug
-                      ? 'bg-primary-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-ink text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-primary-50 hover:text-primary-800'
                   }`}
                 >
                   <span>{cat.icon}</span>
                   <span>{cat.nameFa}</span>
+                  {categoryCountBySlug.has(cat.slug) && <span className="opacity-60">{categoryCountBySlug.get(cat.slug)?.toLocaleString('fa-IR')}</span>}
                 </Link>
               );
             })}
@@ -225,15 +270,15 @@ export default function BrowsePage() {
 
         {/* City Pills */}
         {visibleCities.length > 0 && (
-          <div className="mb-4 md:mb-6">
-            <h3 className="text-sm font-medium text-gray-500 mb-2 md:mb-3">شهر</h3>
+          <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
+            <h2 className="mb-3 text-sm font-bold text-ink">محدود کردن بر اساس شهر</h2>
             <div className="flex md:flex-wrap gap-2 overflow-x-auto pb-1 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide">
               <Link
                 to={resolvedCategorySlug ? `/browse/${countryCode}/category/${resolvedCategorySlug}` : `/browse/${countryCode}`}
                 className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap shrink-0 ${
                   !resolvedCity
-                    ? 'bg-primary-600 text-white shadow-md'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-ink text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-primary-50 hover:text-primary-800'
                 }`}
               >
                 همه شهرها
@@ -249,11 +294,12 @@ export default function BrowsePage() {
                     to={cityUrl}
                     className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap shrink-0 ${
                       citySlug === slug
-                        ? 'bg-primary-600 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        ? 'bg-ink text-white'
+                        : 'bg-slate-100 text-slate-700 hover:bg-primary-50 hover:text-primary-800'
                     }`}
                   >
                     {c.name}
+                    {cityCountByName.has(c.name) && <span className="mr-1 opacity-60">{cityCountByName.get(c.name)?.toLocaleString('fa-IR')}</span>}
                   </Link>
                 );
               })}
@@ -262,16 +308,9 @@ export default function BrowsePage() {
         )}
 
         {/* Results Count */}
-        <div className="flex items-center justify-between mb-6">
-          <p className="text-gray-600">
-            <span className="font-semibold text-gray-900">{total.toLocaleString('fa-IR')}</span> کسب‌وکار یافت شد
-          </p>
+        <div className="mb-6 flex items-end justify-between gap-4">
+          <div><h2 className="text-2xl font-black text-ink">گزینه‌های قابل مقایسه</h2><p className="mt-1 text-sm text-slate-500"><span className="font-bold text-ink">{total.toLocaleString('fa-IR')}</span> کسب‌وکار در این راهنما</p></div>
         </div>
-        {!loading && browseContent && (
-          <p className="mb-6 max-w-3xl text-sm md:text-base leading-7 text-gray-600">
-            {browseContent.intro}
-          </p>
-        )}
 
         {/* Results */}
         {loading ? (
@@ -286,7 +325,7 @@ export default function BrowsePage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6 mb-8">
+            <div className="mb-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {listings.map((listing) => (
                 <ListingCard key={listing.id} listing={listing} />
               ))}
@@ -342,29 +381,29 @@ export default function BrowsePage() {
         )}
 
         {!loading && browseContent && (
-          <section className="mt-10 rounded-2xl border border-gray-200 bg-white p-5 md:p-8" aria-labelledby="browse-guide-heading">
-            <h2 id="browse-guide-heading" className="text-xl md:text-2xl font-bold text-gray-900 mb-4">
+          <section className="mt-12 grid gap-8 rounded-3xl border border-slate-200 bg-white p-6 md:grid-cols-[1fr_.8fr] md:p-9" aria-labelledby="browse-guide-heading">
+            <div><h2 id="browse-guide-heading" className="mb-4 text-2xl font-black text-ink md:text-3xl">
               {browseContent.overviewHeading}
             </h2>
-            <div className="space-y-3 text-sm md:text-base leading-7 text-gray-600">
+            <div className="space-y-3 text-sm leading-7 text-slate-600 md:text-base">
               {browseContent.paragraphs.map((paragraph) => (
                 <p key={paragraph}>{paragraph}</p>
               ))}
-            </div>
-            <h3 className="text-base md:text-lg font-semibold text-gray-900 mt-6 mb-3">
+            </div></div>
+            <div className="rounded-2xl bg-porcelain p-5"><h3 className="mb-3 text-base font-black text-ink md:text-lg">
               {browseContent.checklistHeading}
             </h3>
-            <ul className="space-y-2 text-sm md:text-base text-gray-700">
+            <ul className="space-y-3 text-sm text-slate-700 md:text-base">
               {browseContent.checklist.map((item) => (
                 <li key={item} className="flex items-start gap-2">
-                  <span className="mt-1 text-primary-600" aria-hidden="true">✓</span>
+                  <span className="mt-1 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary-100 text-xs font-bold text-primary-800" aria-hidden="true">✓</span>
                   <span>{item}</span>
                 </li>
               ))}
             </ul>
-            <p className="mt-6 border-t border-gray-100 pt-4 text-xs md:text-sm leading-6 text-gray-500">
+            <p className="mt-5 border-t border-slate-200 pt-4 text-xs leading-6 text-slate-500 md:text-sm">
               {browseContent.accuracyNote}
-            </p>
+            </p></div>
           </section>
         )}
       </div>

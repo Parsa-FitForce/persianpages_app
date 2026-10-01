@@ -53,6 +53,10 @@ export interface Listing {
   category: Category;
 }
 
+export interface ListingDetailResponse extends Listing {
+  relatedListings: Listing[];
+}
+
 export interface ListingsResponse {
   listings: Listing[];
   pagination: {

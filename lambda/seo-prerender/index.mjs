@@ -20,7 +20,7 @@ const STATIC_PAGES = {
     description: 'کشور خود را انتخاب کنید و کسب‌وکارهای ایرانی نزدیک خود را پیدا کنید.',
     url: 'https://persianpages.com/select-country',
     type: 'website',
-    bodyHtml: '<main><h1>انتخاب کشور</h1><p>کشور مورد نظر را برای مشاهده شهرها و کسب‌وکارهای ایرانی انتخاب کنید.</p><p><a href="/">بازگشت به صفحه اصلی</a></p></main>',
+    bodyHtml: '<main><h1>کسب‌وکارهای ایرانی را بر اساس کشور پیدا کنید</h1><p>کشور مورد نظر را برای مشاهده شهرها، دسته‌بندی‌ها و اطلاعات تماس کسب‌وکارهای ایرانی انتخاب کنید.</p><nav aria-label="کشورها"><ul><li><a href="/browse/us">آمریکا</a></li><li><a href="/browse/ca">کانادا</a></li><li><a href="/browse/gb">انگلستان</a></li><li><a href="/browse/ae">امارات</a></li><li><a href="/browse/es">اسپانیا</a></li><li><a href="/browse/se">سوئد</a></li><li><a href="/browse/it">ایتالیا</a></li></ul></nav><p><a href="/">بازگشت به صفحه اصلی</a></p></main>',
   },
   '/terms': {
     title: 'Terms & Conditions | شرایط استفاده | PersianPages',
@@ -185,7 +185,7 @@ function buildMetaTags(data) {
   // Robots directive. Indexable pages intentionally omit a robots tag; private,
   // missing, and thin pages get explicit noindex signals here or via React Helmet.
   if (data.noindex) {
-    tags.push(`<meta name="robots" content="noindex, follow">`);
+    tags.push(`<meta name="robots" content="noindex, ${data.nofollow ? 'nofollow' : 'follow'}">`);
   }
 
   // JSON-LD
@@ -257,6 +257,7 @@ export async function handler(event) {
       url: `https://persianpages.com${route.staticPath}`,
       type: 'website',
       noindex: true,
+      nofollow: true,
     };
   } else {
     data = await fetchJson('api.persianpages.com', route.metaPath);

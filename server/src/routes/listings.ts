@@ -234,7 +234,31 @@ router.get('/:idOrSlug', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'کسب‌وکار یافت نشد' });
     }
 
-    res.json(listing);
+    const relatedCandidates = await prisma.listing.findMany({
+      where: {
+        isActive: true,
+        id: { not: listing.id },
+        OR: [
+          { city: listing.city },
+          { categoryId: listing.categoryId },
+        ],
+      },
+      include,
+      orderBy: { updatedAt: 'desc' },
+      take: 30,
+    });
+    const relatedListings = selectCanonicalListings(
+      relatedCandidates,
+      isSeoEligibleBrowseSource
+    )
+      .sort((a, b) => {
+        const aScore = Number(a.city === listing.city) + Number(a.categoryId === listing.categoryId);
+        const bScore = Number(b.city === listing.city) + Number(b.categoryId === listing.categoryId);
+        return bScore - aScore;
+      })
+      .slice(0, 6);
+
+    res.json({ ...listing, relatedListings });
   } catch (error) {
     console.error('Get listing error:', error);
     res.status(500).json({ error: 'خطا در دریافت کسب‌وکار' });

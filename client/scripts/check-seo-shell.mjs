@@ -8,6 +8,12 @@ const filesToCheck = [
 ].filter((file) => fs.existsSync(file));
 
 const globalNoindexPattern = /<meta\s+[^>]*name=["']robots["'][^>]*content=["'][^"']*\bnoindex\b[^"']*["'][^>]*>/i;
+const routeOwnedPatterns = [
+  { label: 'canonical', pattern: /<link\s+[^>]*rel=["']canonical["'][^>]*>/i },
+  { label: 'description', pattern: /<meta\s+[^>]*name=["']description["'][^>]*>/i },
+  { label: 'Open Graph', pattern: /<meta\s+[^>]*property=["']og:[^"']+["'][^>]*>/i },
+  { label: 'Twitter card', pattern: /<meta\s+[^>]*name=["']twitter:[^"']+["'][^>]*>/i },
+];
 
 let failed = false;
 
@@ -18,6 +24,13 @@ for (const file of filesToCheck) {
     failed = true;
     console.error(`SEO shell check failed: ${path.relative(clientRoot, file)} contains a global robots noindex tag:`);
     console.error(match[0]);
+  }
+  for (const { label, pattern } of routeOwnedPatterns) {
+    const routeOwnedMatch = html.match(pattern);
+    if (!routeOwnedMatch) continue;
+    failed = true;
+    console.error(`SEO shell check failed: ${path.relative(clientRoot, file)} contains route-owned ${label} metadata:`);
+    console.error(routeOwnedMatch[0]);
   }
 }
 

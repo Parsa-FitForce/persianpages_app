@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { AuthResponse, BrowseListingsResponse, Category, Listing, ListingsResponse } from '../types';
+import type { AuthResponse, BrowseListingsResponse, Category, Listing, ListingDetailResponse, ListingsResponse } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -75,7 +75,7 @@ export const listingsApi = {
     limit?: number;
   }) => api.get<ListingsResponse>('/listings/featured', { params }),
 
-  getOne: (id: string) => api.get<Listing>(`/listings/${id}`),
+  getOne: (id: string) => api.get<ListingDetailResponse>(`/listings/${id}`),
 
   getMine: () => api.get<Listing[]>('/listings/user/me'),
 

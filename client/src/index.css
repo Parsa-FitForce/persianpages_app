@@ -18,7 +18,30 @@
 
 body {
   direction: rtl;
-  background-color: #f9fafb;
+  background-color: #f4f7f6;
+  color: #112923;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: #afe2dd;
+  color: #103f3d;
+}
+
+:focus-visible {
+  outline: 3px solid rgba(230, 165, 51, 0.75);
+  outline-offset: 3px;
+}
+
+.atlas-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+.text-balance {
+  text-wrap: balance;
 }
 
 
@@ -33,18 +56,27 @@ body {
 
 @layer components {
   .btn-primary {
-    @apply bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors font-medium;
+    @apply bg-primary-600 text-white px-4 py-2.5 rounded-xl hover:bg-primary-700 transition-colors font-semibold;
   }
 
   .btn-secondary {
-    @apply bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors font-medium;
+    @apply bg-white text-ink px-4 py-2.5 rounded-xl border border-slate-200 hover:border-primary-300 hover:bg-primary-50 transition-colors font-semibold;
   }
 
   .input {
-    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all;
+    @apply w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-4 focus:ring-primary-100 focus:border-primary-600 outline-none transition-all bg-white;
   }
 
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden;
+    @apply bg-white rounded-2xl border border-slate-200 overflow-hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

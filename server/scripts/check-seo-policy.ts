@@ -6,6 +6,7 @@ import {
 import {
   buildBrowsePageContent,
   EDITORIAL_BROWSE_PAGE_KEYS,
+  EDITORIAL_HUB_PAGE_KEYS,
 } from '../src/utils/browseContent.js';
 
 type TestListing = Parameters<typeof isSeoEligibleListing>[0];
@@ -39,8 +40,10 @@ function assert(condition: unknown, message: string) {
   }
 }
 
-assert(MIN_INDEXABLE_BROWSE_LISTINGS >= 10, 'Browse pages must require at least 10 strong canonical listings.');
-assert(isSeoEligibleListing(listing()), 'A rich listing with phone, website, description, and rich signals should be indexable.');
+assert(MIN_INDEXABLE_BROWSE_LISTINGS >= 25, 'Browse pages must concentrate indexing on substantial hubs.');
+assert(!isSeoEligibleListing(listing()), 'Unclaimed imported listings must not create standalone indexable pages.');
+assert(isSeoEligibleListing(listing({ isClaimed: true })), 'Claimed rich listings should be indexable.');
+assert(isSeoEligibleListing(listing({ phoneVerified: true })), 'Phone-verified rich listings should be indexable.');
 assert(!isSeoEligibleListing(listing({ description: 'too short' })), 'Thin listing descriptions must not be indexable.');
 assert(!isSeoEligibleListing(listing({ website: null })), 'Listings without a website must not be indexable.');
 assert(!isSeoEligibleListing(listing({ phone: null })), 'Listings without a phone must not be indexable.');
@@ -51,6 +54,7 @@ const weakerDuplicate = listing({
   id: 'weaker',
   slug: 'weaker-duplicate',
   photos: ['https://example.com/one.jpg'],
+  isClaimed: true,
   updatedAt: new Date('2026-01-01T00:00:00Z'),
 });
 const strongerDuplicate = listing({
@@ -61,6 +65,7 @@ const strongerDuplicate = listing({
     'https://example.com/two.jpg',
     'https://example.com/three.jpg',
   ],
+  isClaimed: true,
   updatedAt: new Date('2026-01-02T00:00:00Z'),
 });
 const canonical = selectCanonicalListings([weakerDuplicate, strongerDuplicate]);
@@ -94,7 +99,15 @@ assert(
   !Object.values(restaurantBrowseContent).flat().join(' ').includes('undefined'),
   'Browse content must never expose missing template values.'
 );
-assert(EDITORIAL_BROWSE_PAGE_KEYS.length === 28, 'Every currently indexable city/category page should have an editorial intro.');
+assert(EDITORIAL_BROWSE_PAGE_KEYS.length === 28, 'Priority city/category pages should retain their editorial intros.');
+assert(EDITORIAL_HUB_PAGE_KEYS.length === 27, 'Every concentrated indexable hub should have a hand-written editorial intro.');
+const hubIntros = [
+  buildBrowsePageContent({ countryName: 'آمریکا', totalCount: 440 }).intro,
+  buildBrowsePageContent({ countryName: 'آمریکا', categorySlug: 'restaurant', categoryName: 'رستوران', totalCount: 176 }).intro,
+  buildBrowsePageContent({ countryName: 'آمریکا', cityName: 'لس‌آنجلس', totalCount: 41 }).intro,
+];
+assert(hubIntros.every((intro) => !intro.startsWith('در این صفحه')), 'Indexable hub pages must not use the generic introduction.');
+assert(new Set(hubIntros).size === hubIntros.length, 'Country, category, and city hub intros must be distinct.');
 const categoryNames: Record<string, string> = {
   medical: 'پزشکی',
   legal: 'حقوقی',
@@ -125,7 +138,7 @@ assert(
   'Priority city/category pages should use hand-written local editorial copy.'
 );
 assert(
-  MIN_INDEXABLE_BROWSE_LISTINGS === 10,
+  MIN_INDEXABLE_BROWSE_LISTINGS === 25,
   'Homepage guide links and browse sitemaps must share the same eligibility threshold.'
 );
 const genericBrowseContent = buildBrowsePageContent({

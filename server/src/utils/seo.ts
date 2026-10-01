@@ -19,7 +19,9 @@ type SeoListing = {
 };
 
 export const MIN_INDEXABLE_LISTING_DESCRIPTION_LENGTH = 300;
-export const MIN_INDEXABLE_BROWSE_LISTINGS = 10;
+// Search Console showed Google rejecting nearly the entire programmatic catalog.
+// Concentrate crawl demand on substantial hubs until the domain earns authority.
+export const MIN_INDEXABLE_BROWSE_LISTINGS = 25;
 
 function normalize(value: string | null | undefined): string {
   return (value || '')
@@ -54,10 +56,13 @@ export function isSeoEligibleBrowseSource(listing: SeoListing): boolean {
 }
 
 export function isSeoEligibleListing(listing: SeoListing): boolean {
-  // Imported listings can still be useful, indexable directory pages once they
-  // have enough unique business data. Claim and verification state influence
-  // which duplicate wins, but must not exclude the entire imported catalog.
-  return isSeoEligibleBrowseSource(listing);
+  // Imported records remain useful inside browse hubs, but a standalone page
+  // is indexable only after a first-party trust event. This avoids asking
+  // search engines to index hundreds of AI-enriched third-party records.
+  return Boolean(
+    isSeoEligibleBrowseSource(listing)
+      && (listing.isClaimed || listing.phoneVerified)
+  );
 }
 
 export function listingDuplicateKey(listing: SeoListing): string {

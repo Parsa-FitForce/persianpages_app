@@ -1,36 +1,29 @@
-import { useState, useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { categoriesApi, listingsApi } from '../services/api';
-import type { Category, Listing } from '../types';
-import { getCountryByCode, getCitiesByCountry, toSlug } from '../i18n/locations';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import CategoryCard from '../components/CategoryCard';
 import ListingCard from '../components/ListingCard';
+import { getCitiesByCountry, getCountryByCode, toSlug } from '../i18n/locations';
+import { categoriesApi, listingsApi } from '../services/api';
+import type { Category, Listing } from '../types';
 import { getWebsiteSchema } from '../utils/structuredData';
 
-// These country hubs currently satisfy the same minimum-quality threshold as
-// the browse sitemap. Avoid promoting thin/noindexed browse routes from home.
-const POPULAR_COUNTRY_CODES = ['us', 'ca', 'ae', 'gb', 'se', 'es', 'it'];
-
-const PRIORITY_BROWSE_LINKS = [
-  { href: '/browse/us/los-angeles/medical', label: 'پزشکان ایرانی در لس‌آنجلس' },
-  { href: '/browse/ca/toronto/medical', label: 'پزشکان ایرانی در تورنتو' },
-  { href: '/browse/ca/toronto/legal', label: 'وکلای ایرانی در تورنتو' },
-  { href: '/browse/ca/vancouver/medical', label: 'پزشکان ایرانی در ونکوور' },
-  { href: '/browse/ca/toronto/grocery', label: 'سوپرمارکت‌های ایرانی در تورنتو' },
-  { href: '/browse/ae/dubai/medical', label: 'پزشکان ایرانی در دبی' },
-  { href: '/browse/gb/london/restaurant', label: 'رستوران‌های ایرانی در لندن' },
-  { href: '/browse/se/stockholm/restaurant', label: 'رستوران‌های ایرانی در استکهلم' },
-  { href: '/browse/us/new-york/restaurant', label: 'رستوران‌های ایرانی در نیویورک' },
-  { href: '/browse/us/new-york/legal', label: 'وکلای ایرانی در نیویورک' },
-  { href: '/browse/us/seattle/medical', label: 'پزشکان ایرانی در سیاتل' },
-  { href: '/browse/us/woodland-hills/restaurant', label: 'رستوران‌های ایرانی در وودلند هیلز' },
+const STRONG_GUIDES = [
+  { href: '/browse/us/los-angeles', city: 'لس‌آنجلس', detail: 'رستوران، پزشک، وکیل و خدمات محلی' },
+  { href: '/browse/us/new-york', city: 'نیویورک', detail: 'کسب‌وکارهای ایرانی در سراسر شهر' },
+  { href: '/browse/us/san-francisco', city: 'سانفرانسیسکو', detail: 'راهنمای منطقه خلیج' },
+  { href: '/browse/us/seattle', city: 'سیاتل', detail: 'متخصصان و خدمات ایرانی' },
+  { href: '/browse/ca/toronto', city: 'تورنتو', detail: 'راهنمای جامعه ایرانی تورنتو' },
+  { href: '/browse/ca/vancouver', city: 'ونکوور', detail: 'خدمات ایرانی در مترو ونکوور' },
 ];
+
+const QUICK_SEARCHES = ['رستوران ایرانی', 'پزشک فارسی‌زبان', 'وکیل ایرانی', 'سوپرمارکت ایرانی'];
 
 export default function Home() {
   const [search, setSearch] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
   const [listings, setListings] = useState<Listing[]>([]);
+  const [directoryTotal, setDirectoryTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -40,39 +33,43 @@ export default function Home() {
   const countryCities = countryCode ? getCitiesByCountry(countryCode) : [];
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
-
-    // Get country name for filtering
-    const countryFilter = selectedCountry?.name;
-
     Promise.all([
       categoriesApi.getAll(),
-      listingsApi.getFeatured({ limit: 12, country: countryFilter }),
+      listingsApi.getFeatured({ limit: 12, country: selectedCountry?.name }),
     ])
-      .then(([catRes, listRes]) => {
-        setCategories(catRes.data);
-        setListings(listRes.data.listings);
+      .then(([categoryResponse, listingResponse]) => {
+        if (cancelled) return;
+        setCategories(categoryResponse.data);
+        setListings(listingResponse.data.listings);
+        setDirectoryTotal(listingResponse.data.pagination.total);
       })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [countryCode, selectedCountry?.name]);
+      .catch((error) => {
+        if (!cancelled) console.error(error);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (search.trim()) {
-      const params = new URLSearchParams();
-      params.set('search', search);
-      if (countryCode) params.set('country', countryCode);
-      navigate(`/search?${params.toString()}`);
-    }
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCountry?.name]);
+
+  const runSearch = (query: string) => {
+    const params = new URLSearchParams();
+    if (query.trim()) params.set('search', query.trim());
+    if (countryCode) params.set('country', countryCode);
+    navigate(`/search?${params.toString()}`);
   };
 
   const pageTitle = selectedCountry
     ? `کسب‌وکارهای ایرانی در ${selectedCountry.name} | پرشین‌پیجز`
-    : 'پرشین‌پیجز - راهنمای کسب‌وکارهای ایرانی در سراسر جهان';
+    : 'پرشین‌پیجز | راهنمای کسب‌وکارهای ایرانی در سراسر جهان';
   const pageDescription = selectedCountry
-    ? `راهنمای کسب‌وکارهای ایرانی در ${selectedCountry.name}. رستوران، پزشک، وکیل، سوپرمارکت و خدمات ایرانی را پیدا کنید.`
-    : 'راهنمای جامع کسب‌وکارهای ایرانی در سراسر جهان. رستوران، پزشک، وکیل، سوپرمارکت و خدمات ایرانی را در شهر خود پیدا کنید.';
+    ? `کسب‌وکارها و متخصصان ایرانی در ${selectedCountry.name} را بر اساس شهر و دسته‌بندی پیدا و مقایسه کنید.`
+    : 'کسب‌وکارها، رستوران‌ها، پزشکان، وکلا و خدمات ایرانی را بر اساس شهر و تخصص پیدا کنید.';
 
   return (
     <div className="min-h-screen">
@@ -82,169 +79,93 @@ export default function Home() {
         <meta property="og:title" content={pageTitle} />
         <meta property="og:description" content={pageDescription} />
         <link rel="canonical" href="https://persianpages.com/" />
-        <script type="application/ld+json">
-          {JSON.stringify(getWebsiteSchema())}
-        </script>
+        <script type="application/ld+json">{JSON.stringify(getWebsiteSchema())}</script>
       </Helmet>
 
-      {/* Hero */}
-      <section className="bg-gradient-to-bl from-primary-600 to-primary-800 text-white py-8 md:py-16">
-        <div className="max-w-4xl mx-auto px-4 text-center">
-          {selectedCountry ? (
-            <>
-              <div className="text-4xl md:text-5xl mb-2 md:mb-4">{selectedCountry.flag}</div>
-              <h1 className="text-2xl md:text-4xl font-bold mb-1 md:mb-3">
-                کسب‌وکارهای ایرانی در {selectedCountry.name}
-              </h1>
-              <p className="text-sm md:text-lg text-primary-100">
-                {countryCities.length.toLocaleString('fa-IR')} شهر
-              </p>
-            </>
-          ) : (
-            <>
-              <h1 className="text-2xl md:text-5xl font-bold mb-2 md:mb-4">
-                راهنمای کسب‌وکارهای ایرانی در سراسر جهان
-              </h1>
-              <p className="text-sm md:text-lg text-primary-100 mb-4 md:mb-8">
-                به راحتی کسب‌وکارهای ایرانی را در شهر خود پیدا کنید
-              </p>
-            </>
-          )}
-
-          <form onSubmit={handleSearch} className="max-w-2xl mx-auto mt-4 md:mt-6">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={selectedCountry ? `جستجو در ${selectedCountry.name}...` : 'جستجوی کسب‌وکار...'}
-                className="input flex-1 text-gray-900"
-              />
-              <button type="submit" className="btn-primary bg-white text-primary-600 hover:bg-gray-100">
-                جستجو
-              </button>
+      <section className="atlas-grid overflow-hidden bg-ink text-white">
+        <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-14 sm:px-6 md:py-20 lg:grid-cols-[1.1fr_.9fr] lg:px-8 lg:py-24">
+          <div>
+            <p className="mb-4 text-sm font-bold text-primary-200">راهنمای جامعه ایرانی، شهر به شهر</p>
+            <h1 className="max-w-3xl text-balance text-4xl font-black leading-[1.25] tracking-tight md:text-6xl">
+              کسب‌وکارهای ایرانی را در شهر خود پیدا کنید
+            </h1>
+            <p lang="en" dir="ltr" className="mt-3 w-fit font-latin text-sm font-semibold text-primary-200 md:text-base">Persian business directory by city and category</p>
+            <p className="mt-5 max-w-2xl text-base leading-8 text-slate-300 md:text-lg">
+              از پزشک و وکیل تا رستوران و سوپرمارکت؛ اطلاعات تماس و موقعیت هر کسب‌وکار را در یک راهنمای فارسی مقایسه کنید.
+            </p>
+            <form className="mt-8 max-w-2xl" onSubmit={(event) => { event.preventDefault(); runSearch(search); }} role="search">
+              <label htmlFor="home-search" className="sr-only">جستجوی کسب‌وکار یا خدمات</label>
+              <div className="flex flex-col gap-2 rounded-2xl bg-white p-2 shadow-2xl shadow-black/20 sm:flex-row">
+                <input id="home-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={selectedCountry ? `چه چیزی در ${selectedCountry.name} می‌خواهید؟` : 'نام کسب‌وکار، تخصص یا خدمات'} className="min-w-0 flex-1 rounded-xl border-0 px-4 py-3.5 text-base text-ink outline-none placeholder:text-slate-400 focus:ring-0" />
+                <button type="submit" className="rounded-xl bg-primary-600 px-6 py-3.5 font-bold text-white hover:bg-primary-700">جستجو در راهنما</button>
+              </div>
+            </form>
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-300">
+              <span>جستجوهای رایج:</span>
+              {QUICK_SEARCHES.map((term) => <button key={term} type="button" onClick={() => runSearch(term)} className="border-b border-white/30 pb-0.5 text-white hover:border-saffron hover:text-saffron">{term}</button>)}
             </div>
-          </form>
+          </div>
 
-          {/* Quick City Links */}
-          {countryCities.length > 0 && (
-            <div className="mt-3 md:mt-6 flex flex-wrap justify-center gap-1.5 md:gap-2">
-              {countryCities.slice(0, 8).map((city) => (
-                <Link
-                  key={city.nameEn}
-                  to={`/browse/${countryCode}/${toSlug(city.nameEn)}`}
-                  className="px-2.5 py-0.5 md:px-3 md:py-1 bg-white/20 rounded-full text-xs md:text-sm hover:bg-white/30 transition-colors"
-                >
-                  {city.name}
+          <aside className="rounded-3xl border border-white/15 bg-white/[0.07] p-5 backdrop-blur-sm md:p-7" aria-label="مسیرهای سریع راهنما">
+            <div className="flex items-center justify-between border-b border-white/15 pb-4">
+              <div><p className="font-bold">از کجا شروع کنیم؟</p><p className="mt-1 text-sm text-slate-300">یک مسیر مستقیم به راهنماهای پرمحتوا</p></div>
+              {selectedCountry && <span className="text-3xl" aria-hidden="true">{selectedCountry.flag}</span>}
+            </div>
+            <div className="mt-3 divide-y divide-white/10">
+              {(countryCities.length > 0
+                ? countryCities.slice(0, 6).map((city) => ({ href: `/browse/${countryCode}/${toSlug(city.nameEn)}`, city: city.name, detail: `راهنمای ${selectedCountry?.name || ''}` }))
+                : STRONG_GUIDES.slice(0, 5)
+              ).map((guide) => (
+                <Link key={guide.href} to={guide.href} className="flex items-center justify-between gap-4 py-3.5 text-sm hover:text-saffron">
+                  <span><strong className="block text-base text-white">{guide.city}</strong><span className="mt-0.5 block text-slate-300">{guide.detail}</span></span>
+                  <svg className="h-5 w-5 shrink-0 rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
                 </Link>
               ))}
-              {countryCities.length > 8 && (
-                <Link
-                  to={`/browse/${countryCode}`}
-                  className="px-2.5 py-0.5 md:px-3 md:py-1 bg-white/20 rounded-full text-xs md:text-sm hover:bg-white/30 transition-colors"
-                >
-                  +{(countryCities.length - 8).toLocaleString('fa-IR')} شهر دیگر
-                </Link>
-              )}
             </div>
-          )}
+            <Link to="/select-country" className="mt-4 inline-flex text-sm font-bold text-primary-200 hover:text-white">مشاهده همه کشورها و شهرها</Link>
+          </aside>
         </div>
       </section>
 
-      {/* Categories */}
-      <section className="max-w-7xl mx-auto px-4 py-6 md:py-12">
-        <h2 className="text-lg md:text-2xl font-bold mb-3 md:mb-6">دسته‌بندی‌ها</h2>
-        {loading ? (
-          <div className="text-center text-gray-500">در حال بارگذاری...</div>
-        ) : (
-          <div className="grid grid-cols-5 gap-2 md:gap-4">
-            {categories.map((cat) => (
-              <CategoryCard key={cat.id} category={cat} countryCode={countryCode} />
-            ))}
-          </div>
-        )}
+      <section className="border-b border-slate-200 bg-white" aria-label="آمار راهنما">
+        <div className="mx-auto grid max-w-7xl grid-cols-3 divide-x divide-x-reverse divide-slate-200 px-4 sm:px-6 lg:px-8">
+          <div className="py-5 text-center"><strong className="block text-xl font-black text-ink md:text-2xl">{loading ? '—' : directoryTotal.toLocaleString('fa-IR')}</strong><span className="text-xs text-slate-500 md:text-sm">فهرست کامل</span></div>
+          <div className="py-5 text-center"><strong className="block text-xl font-black text-ink md:text-2xl">{loading ? '—' : categories.length.toLocaleString('fa-IR')}</strong><span className="text-xs text-slate-500 md:text-sm">دسته خدمات</span></div>
+          <div className="py-5 text-center"><strong className="block text-xl font-black text-ink md:text-2xl">۲۰</strong><span className="text-xs text-slate-500 md:text-sm">کشور</span></div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 md:py-16 lg:px-8" aria-labelledby="categories-heading">
+        <div className="mb-7 flex items-end justify-between gap-4">
+          <div><h2 id="categories-heading" className="text-2xl font-black text-ink md:text-3xl">بر اساس نیازتان پیدا کنید</h2><p className="mt-2 text-slate-600">دسته را انتخاب کنید؛ سپس شهر و کشور را محدود کنید.</p></div>
+          <Link to="/search" className="hidden text-sm font-bold text-primary-700 sm:block">جستجوی پیشرفته</Link>
+        </div>
+        {loading ? <div className="py-12 text-center text-slate-500">در حال بارگذاری راهنما…</div> : <div className="grid grid-cols-2 gap-3 md:grid-cols-5 md:gap-4">{categories.slice(0, 10).map((category) => <CategoryCard key={category.id} category={category} countryCode={countryCode} />)}</div>}
       </section>
 
       {!selectedCountry && (
-        <section className="border-y border-gray-200 bg-white">
-          <div className="max-w-7xl mx-auto px-4 py-6 md:py-10 space-y-8">
-            <div className="flex items-end justify-between gap-4 mb-4">
-              <div>
-                <h2 className="text-lg md:text-2xl font-bold">کشورهای پربازدید</h2>
-                <p className="text-sm text-gray-500 mt-1">راهنمای شهرها و کسب‌وکارهای ایرانی</p>
-              </div>
-              <Link to="/select-country" className="text-sm text-primary-700 hover:text-primary-800">
-                همه کشورها
-              </Link>
-            </div>
-            <nav aria-label="کشورهای پربازدید" className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-              {POPULAR_COUNTRY_CODES.map((code) => {
-                const item = getCountryByCode(code);
-                if (!item) return null;
-                return (
-                  <Link
-                    key={code}
-                    to={`/browse/${code}`}
-                    className="flex items-center gap-2 px-3 py-3 border border-gray-200 rounded-lg text-sm font-medium text-gray-800 hover:border-primary-300 hover:text-primary-700 transition-colors"
-                  >
-                    <span aria-hidden="true">{item.flag}</span>
-                    <span>{item.name}</span>
-                  </Link>
-                );
-              })}
-            </nav>
-
-            <div>
-              <div className="mb-4">
-                <h2 className="text-lg md:text-2xl font-bold">راهنماهای محبوب شهر و تخصص</h2>
-                <p className="text-sm text-gray-500 mt-1">مسیرهای مستقیم به فهرست‌های کامل و به‌روز پرشین‌پیجز</p>
-              </div>
-              <nav aria-label="راهنماهای محبوب" className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {PRIORITY_BROWSE_LINKS.map((item) => (
-                  <Link
-                    key={item.href}
-                    to={item.href}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 hover:border-primary-300 hover:text-primary-700 transition-colors"
-                  >
-                    <span>{item.label}</span>
-                    <span aria-hidden="true" className="text-primary-500">←</span>
-                  </Link>
-                ))}
+        <section className="border-y border-slate-200 bg-white">
+          <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 md:py-16 lg:px-8">
+            <div className="grid gap-8 lg:grid-cols-[.7fr_1.3fr]">
+              <div><h2 className="text-2xl font-black text-ink md:text-3xl">راهنمای شهرهای پرتقاضا</h2><p className="mt-3 max-w-md leading-8 text-slate-600">به‌جای عبور از صدها صفحه کم‌محتوا، از راهنماهایی شروع کنید که گزینه‌های کافی برای مقایسه دارند.</p><Link to="/select-country" className="btn-secondary mt-6 inline-flex">مرور همه شهرها</Link></div>
+              <nav className="grid gap-3 sm:grid-cols-2" aria-label="شهرهای پرتقاضا">
+                {STRONG_GUIDES.map((guide) => <Link key={guide.href} to={guide.href} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 p-4 hover:border-primary-300 hover:bg-primary-50/40"><span><strong className="block text-lg text-ink">{guide.city}</strong><span className="mt-1 block text-sm text-slate-500">{guide.detail}</span></span><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ink text-white" aria-hidden="true">←</span></Link>)}
               </nav>
             </div>
           </div>
         </section>
       )}
 
-      {/* Featured indexable listings */}
-      <section className="max-w-7xl mx-auto px-4 pb-8 md:pb-16">
-        <div className="flex justify-between items-center mb-4 md:mb-6">
-          <h2 className="text-lg md:text-2xl font-bold">
-            {selectedCountry ? `کسب‌وکارهای منتخب ${selectedCountry.name}` : 'کسب‌وکارهای منتخب'}
-          </h2>
-          <button
-            onClick={() => navigate(countryCode ? `/search?country=${countryCode}` : '/search')}
-            className="text-primary-600 hover:text-primary-700"
-          >
-            مشاهده همه ←
-          </button>
+      <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 md:py-16 lg:px-8" aria-labelledby="featured-heading">
+        <div className="mb-7 flex items-end justify-between gap-4"><div><h2 id="featured-heading" className="text-2xl font-black text-ink md:text-3xl">فهرست‌های کامل‌تر</h2><p className="mt-2 text-slate-600">صفحه‌هایی با اطلاعات تماس، وب‌سایت و جزئیات قابل مقایسه.</p></div><Link to={countryCode ? `/search?country=${countryCode}` : '/search'} className="text-sm font-bold text-primary-700">مشاهده همه</Link></div>
+        {loading ? <div className="py-16 text-center text-slate-500">در حال بارگذاری کسب‌وکارها…</div> : listings.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 p-12 text-center text-slate-500">هنوز فهرست کاملی برای این محدوده نداریم.</div> : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{listings.map((listing) => <ListingCard key={listing.id} listing={listing} />)}</div>}
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 pb-6 sm:px-6 lg:px-8">
+        <div className="overflow-hidden rounded-3xl bg-lapis px-6 py-9 text-white md:flex md:items-center md:justify-between md:px-10">
+          <div><h2 className="text-2xl font-black">اطلاعات کسب‌وکارتان را خودتان مدیریت کنید</h2><p className="mt-2 max-w-2xl text-sm leading-7 text-blue-100">ثبت مالکیت و تأیید شماره تماس به مشتریان و موتورهای جستجو نشان می‌دهد اطلاعات صفحه از یک منبع دست‌اول می‌آید.</p></div>
+          <Link to="/register" className="mt-5 inline-flex shrink-0 rounded-xl bg-white px-5 py-3 font-bold text-lapis hover:bg-blue-50 md:mt-0">ثبت یا تأیید کسب‌وکار</Link>
         </div>
-        {loading ? (
-          <div className="text-center text-gray-500">در حال بارگذاری...</div>
-        ) : listings.length === 0 ? (
-          <div className="text-center text-gray-500 py-12">
-            {selectedCountry
-              ? `هنوز کسب‌وکاری در ${selectedCountry.name} ثبت نشده است`
-              : 'هنوز کسب‌وکاری ثبت نشده است'
-            }
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
-            {listings.map((listing) => (
-              <ListingCard key={listing.id} listing={listing} />
-            ))}
-          </div>
-        )}
       </section>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { categoriesApi, listingsApi } from '../services/api';
@@ -19,6 +19,7 @@ export default function Search() {
   const categorySlug = searchParams.get('category') || '';
   const city = searchParams.get('city') || '';
   const countryCode = searchParams.get('country') || localStorage.getItem('selectedCountry') || '';
+  const [draftSearch, setDraftSearch] = useState(search);
 
   const selectedCountry = countryCode ? getCountryByCode(countryCode) : null;
   const countryCities = countryCode ? getCitiesByCountry(countryCode) : [];
@@ -28,260 +29,202 @@ export default function Search() {
   }, []);
 
   useEffect(() => {
+    setDraftSearch(search);
+  }, [search]);
+
+  useEffect(() => {
+    let cancelled = false;
     setLoading(true);
-    const countryFilter = selectedCountry?.name;
     listingsApi
-      .getAll({ search, category: categorySlug, city, country: countryFilter, page })
+      .getAll({ search, category: categorySlug, city, country: selectedCountry?.name, page })
       .then((res) => {
+        if (cancelled) return;
         setListings(res.data.listings);
         setTotal(res.data.pagination.total);
         setPages(res.data.pagination.pages);
       })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .catch((error) => {
+        if (!cancelled) console.error(error);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [search, categorySlug, city, page, selectedCountry?.name]);
 
   const updateFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams);
-    if (value) {
-      params.set(key, value);
-    } else {
-      params.delete(key);
-    }
+    value ? params.set(key, value) : params.delete(key);
     setSearchParams(params);
     setPage(1);
   };
 
-  const selectedCategory = categories.find(c => c.slug === categorySlug);
+  const submitSearch = (event: FormEvent) => {
+    event.preventDefault();
+    updateFilter('search', draftSearch.trim());
+  };
 
-  const titleParts = ['جستجو'];
+  const selectedCategory = categories.find((category) => category.slug === categorySlug);
+  const hasFilters = Boolean(search || categorySlug || city);
+  const titleParts = ['جستجوی کسب‌وکارهای ایرانی'];
   if (search) titleParts.push(`«${search}»`);
   if (selectedCategory) titleParts.push(selectedCategory.nameFa);
   if (city) titleParts.push(city);
   if (selectedCountry) titleParts.push(selectedCountry.name);
-  const searchTitle = `${titleParts.join(' - ')} | پرشین‌پیجز`;
 
   return (
     <div className="min-h-screen">
       <Helmet>
-        <title>{searchTitle}</title>
-        <meta name="robots" content="noindex, follow" />
+        <title>{`${titleParts.join(' - ')} | پرشین‌پیجز`}</title>
+        <meta name="robots" content="noindex, nofollow" />
       </Helmet>
 
-      {/* Search Header */}
-      <div className="bg-gradient-to-l from-primary-600 to-primary-700 text-white py-4 md:py-8">
-        <div className="max-w-5xl mx-auto px-4">
-          <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-6">
-            {selectedCountry && (
-              <span className="text-2xl md:text-3xl">{selectedCountry.flag}</span>
-            )}
-            <h1 className="text-lg md:text-2xl font-bold">
-              {selectedCountry
-                ? `جستجو در ${selectedCountry.name}`
-                : 'جستجوی کسب‌وکار'}
-            </h1>
+      <section className="atlas-grid bg-ink py-10 text-white sm:py-14">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mb-5 flex items-center gap-3">
+            {selectedCountry && <span className="text-3xl" aria-hidden="true">{selectedCountry.flag}</span>}
+            <div>
+              <p className="text-xs font-bold tracking-wide text-primary-300">جستجوی دایرکتوری</p>
+              <h1 className="mt-1 text-2xl font-black sm:text-3xl">
+                {selectedCountry ? `کسب‌وکارهای ایرانی در ${selectedCountry.name}` : 'کسب‌وکار ایرانی پیدا کنید'}
+              </h1>
+            </div>
           </div>
-
-          {/* Search Input */}
-          <div className="relative">
+          <form onSubmit={submitSearch} className="flex max-w-3xl flex-col gap-2 rounded-2xl bg-white p-2 shadow-2xl shadow-black/20 sm:flex-row" role="search">
+            <label htmlFor="directory-search" className="sr-only">نام کسب‌وکار، خدمات یا محصول</label>
             <input
-              type="text"
-              value={search}
-              onChange={(e) => updateFilter('search', e.target.value)}
-              placeholder="نام کسب‌وکار، خدمات یا محصول..."
-              className="w-full px-4 py-3 pr-10 md:px-5 md:py-4 md:pr-12 rounded-xl md:rounded-2xl text-gray-900 text-base md:text-lg shadow-lg focus:ring-4 focus:ring-white/30 outline-none"
+              id="directory-search"
+              type="search"
+              value={draftSearch}
+              onChange={(event) => setDraftSearch(event.target.value)}
+              placeholder="مثلاً وکیل، دندانپزشک یا رستوران…"
+              className="min-w-0 flex-1 rounded-xl border-0 bg-transparent px-4 py-3 text-base text-ink placeholder:text-slate-400 focus:ring-0"
             />
-            <svg
-              className="absolute right-3 md:right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
+            <button type="submit" className="rounded-xl bg-saffron px-6 py-3 text-sm font-black text-ink transition hover:bg-amber-400">جستجو</button>
+          </form>
         </div>
-      </div>
+      </section>
 
-      <div className="max-w-5xl mx-auto px-4 py-4 md:py-6">
-        {/* Category Pills — horizontal scroll on mobile */}
-        <div className="mb-4 md:mb-6">
-          <h3 className="text-sm font-medium text-gray-500 mb-2 md:mb-3">دسته‌بندی</h3>
-          <div className="flex md:flex-wrap gap-2 overflow-x-auto pb-1 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide">
-            <button
-              onClick={() => updateFilter('category', '')}
-              className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap shrink-0 ${
-                !categorySlug
-                  ? 'bg-primary-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              همه
-            </button>
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => updateFilter('category', cat.slug)}
-                className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
-                  categorySlug === cat.slug
-                    ? 'bg-primary-600 text-white shadow-md'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <span>{cat.icon}</span>
-                <span>{cat.nameFa}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* City Pills — horizontal scroll on mobile */}
-        {countryCities.length > 0 && (
-          <div className="mb-4 md:mb-6">
-            <h3 className="text-sm font-medium text-gray-500 mb-2 md:mb-3">شهر</h3>
-            <div className="flex md:flex-wrap gap-2 overflow-x-auto pb-1 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide">
-              <button
-                onClick={() => updateFilter('city', '')}
-                className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap shrink-0 ${
-                  !city
-                    ? 'bg-primary-600 text-white shadow-md'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                همه شهرها
-              </button>
-              {countryCities.map((c) => (
-                <button
-                  key={c.nameEn}
-                  onClick={() => updateFilter('city', c.name)}
-                  className={`px-3 md:px-4 py-1.5 md:py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap shrink-0 ${
-                    city === c.name
-                      ? 'bg-primary-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {c.name}
-                </button>
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="grid gap-8 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <aside className="grid min-w-0 gap-4 md:grid-cols-2 lg:sticky lg:top-24 lg:block lg:self-start lg:space-y-5" aria-label="فیلترهای جستجو">
+            <FilterPanel title="دسته‌بندی">
+              <FilterButton active={!categorySlug} onClick={() => updateFilter('category', '')}>همه دسته‌ها</FilterButton>
+              {categories.map((category) => (
+                <FilterButton key={category.id} active={categorySlug === category.slug} onClick={() => updateFilter('category', category.slug)}>
+                  <span aria-hidden="true">{category.icon}</span>
+                  <span>{category.nameFa}</span>
+                </FilterButton>
               ))}
-            </div>
-          </div>
-        )}
+            </FilterPanel>
 
-        {/* Active Filters Summary */}
-        {(search || categorySlug || city) && (
-          <div className="flex items-center gap-2 mb-6 text-sm">
-            <span className="text-gray-500">فیلترهای فعال:</span>
-            {search && (
-              <span className="inline-flex items-center gap-1 px-3 py-1 bg-primary-50 text-primary-700 rounded-full">
-                «{search}»
-                <button
-                  onClick={() => updateFilter('search', '')}
-                  className="hover:text-primary-900"
-                >
-                  ✕
-                </button>
-              </span>
+            {countryCities.length > 0 && (
+              <FilterPanel title="شهر">
+                <FilterButton active={!city} onClick={() => updateFilter('city', '')}>همه شهرها</FilterButton>
+                {countryCities.map((countryCity) => (
+                  <FilterButton key={countryCity.nameEn} active={city === countryCity.name} onClick={() => updateFilter('city', countryCity.name)}>
+                    {countryCity.name}
+                  </FilterButton>
+                ))}
+              </FilterPanel>
             )}
-            {selectedCategory && (
-              <span className="inline-flex items-center gap-1 px-3 py-1 bg-primary-50 text-primary-700 rounded-full">
-                {selectedCategory.icon} {selectedCategory.nameFa}
-                <button
-                  onClick={() => updateFilter('category', '')}
-                  className="hover:text-primary-900"
-                >
-                  ✕
-                </button>
-              </span>
-            )}
-            {city && (
-              <span className="inline-flex items-center gap-1 px-3 py-1 bg-primary-50 text-primary-700 rounded-full">
-                {city}
-                <button
-                  onClick={() => updateFilter('city', '')}
-                  className="hover:text-primary-900"
-                >
-                  ✕
-                </button>
-              </span>
-            )}
-          </div>
-        )}
+          </aside>
 
-        {/* Results Count */}
-        <div className="flex items-center justify-between mb-6">
-          <p className="text-gray-600">
-            <span className="font-semibold text-gray-900">{total.toLocaleString('fa-IR')}</span> کسب‌وکار یافت شد
-          </p>
-        </div>
-
-        {/* Results */}
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
-          </div>
-        ) : listings.length === 0 ? (
-          <div className="text-center py-20">
-            <div className="text-6xl mb-4">🔍</div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">نتیجه‌ای یافت نشد</h3>
-            <p className="text-gray-500">فیلترهای جستجو را تغییر دهید</p>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6 mb-8">
-              {listings.map((listing) => (
-                <ListingCard key={listing.id} listing={listing} />
-              ))}
+          <section className="min-w-0" aria-live="polite" aria-busy={loading}>
+            <div className="mb-6 flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-bold text-primary-700">نتایج جستجو</p>
+                <h2 className="mt-1 text-2xl font-black text-ink">
+                  {loading ? 'در حال پیدا کردن…' : `${total.toLocaleString('fa-IR')} کسب‌وکار`}
+                </h2>
+              </div>
+              {hasFilters && (
+                <button
+                  onClick={() => {
+                    setDraftSearch('');
+                    const params = new URLSearchParams(searchParams);
+                    ['search', 'category', 'city'].forEach((key) => params.delete(key));
+                    setSearchParams(params);
+                    setPage(1);
+                  }}
+                  className="self-start text-sm font-bold text-primary-700 underline decoration-primary-300 underline-offset-4 hover:text-primary-900 sm:self-auto"
+                >
+                  پاک کردن همه فیلترها
+                </button>
+              )}
             </div>
 
-            {/* Pagination */}
-            {pages > 1 && (
-              <div className="flex items-center justify-center gap-2">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40 disabled:hover:bg-gray-100 transition-colors"
-                >
-                  قبلی
-                </button>
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.min(5, pages) }, (_, i) => {
-                    let pageNum;
-                    if (pages <= 5) {
-                      pageNum = i + 1;
-                    } else if (page <= 3) {
-                      pageNum = i + 1;
-                    } else if (page >= pages - 2) {
-                      pageNum = pages - 4 + i;
-                    } else {
-                      pageNum = page - 2 + i;
-                    }
-                    return (
-                      <button
-                        key={pageNum}
-                        onClick={() => setPage(pageNum)}
-                        className={`w-10 h-10 rounded-lg font-medium transition-colors ${
-                          page === pageNum
-                            ? 'bg-primary-600 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                      >
-                        {pageNum.toLocaleString('fa-IR')}
-                      </button>
-                    );
-                  })}
-                </div>
-                <button
-                  onClick={() => setPage((p) => Math.min(pages, p + 1))}
-                  disabled={page === pages}
-                  className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40 disabled:hover:bg-gray-100 transition-colors"
-                >
-                  بعدی
-                </button>
+            {hasFilters && (
+              <div className="mb-6 flex flex-wrap gap-2">
+                {search && <ActiveFilter label={`«${search}»`} onClear={() => updateFilter('search', '')} />}
+                {selectedCategory && <ActiveFilter label={`${selectedCategory.icon} ${selectedCategory.nameFa}`} onClear={() => updateFilter('category', '')} />}
+                {city && <ActiveFilter label={city} onClear={() => updateFilter('city', '')} />}
               </div>
             )}
-          </>
-        )}
+
+            {loading ? (
+              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3" aria-label="در حال بارگذاری نتایج">
+                {Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-72 animate-pulse rounded-2xl bg-slate-200" />)}
+              </div>
+            ) : listings.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center">
+                <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-50 text-2xl" aria-hidden="true">⌕</div>
+                <h3 className="text-xl font-black text-ink">نتیجه‌ای پیدا نشد</h3>
+                <p className="mt-2 text-sm text-slate-600">عبارت کوتاه‌تری امتحان کنید یا یکی از فیلترها را بردارید.</p>
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                  {listings.map((listing) => <ListingCard key={listing.id} listing={listing} />)}
+                </div>
+                {pages > 1 && (
+                  <nav className="mt-10 flex flex-wrap items-center justify-center gap-2" aria-label="صفحه‌بندی نتایج">
+                    <button onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page === 1} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-ink hover:border-primary-300 disabled:cursor-not-allowed disabled:opacity-40">قبلی</button>
+                    {Array.from({ length: Math.min(5, pages) }, (_, index) => {
+                      const pageNumber = pages <= 5 ? index + 1 : page <= 3 ? index + 1 : page >= pages - 2 ? pages - 4 + index : page - 2 + index;
+                      return (
+                        <button key={pageNumber} onClick={() => setPage(pageNumber)} aria-current={page === pageNumber ? 'page' : undefined} className={`h-10 w-10 rounded-xl text-sm font-bold ${page === pageNumber ? 'bg-ink text-white' : 'border border-slate-200 bg-white text-ink hover:border-primary-300'}`}>
+                          {pageNumber.toLocaleString('fa-IR')}
+                        </button>
+                      );
+                    })}
+                    <button onClick={() => setPage((current) => Math.min(pages, current + 1))} disabled={page === pages} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-ink hover:border-primary-300 disabled:cursor-not-allowed disabled:opacity-40">بعدی</button>
+                  </nav>
+                )}
+              </>
+            )}
+          </section>
+        </div>
       </div>
     </div>
+  );
+}
+
+function FilterPanel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h2 className="mb-3 text-sm font-black text-ink">{title}</h2>
+      <div className="flex gap-2 overflow-x-auto pb-1 lg:max-h-72 lg:block lg:space-y-1 lg:overflow-y-auto lg:pl-1">{children}</div>
+    </section>
+  );
+}
+
+function FilterButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button onClick={onClick} aria-pressed={active} className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-right text-sm transition lg:w-full ${active ? 'bg-ink font-bold text-white' : 'text-slate-700 hover:bg-primary-50 hover:text-primary-800'}`}>
+      {children}
+    </button>
+  );
+}
+
+function ActiveFilter({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm font-bold text-primary-800">
+      {label}
+      <button onClick={onClear} aria-label={`حذف فیلتر ${label}`} className="rounded-full text-primary-600 hover:text-primary-950">×</button>
+    </span>
   );
 }

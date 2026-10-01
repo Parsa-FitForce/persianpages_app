@@ -1,68 +1,60 @@
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { countries } from '../i18n/locations';
+import BrandMark from '../components/BrandMark';
 
 export default function SelectCountry() {
   const navigate = useNavigate();
 
-  const handleCountrySelect = (countryCode: string) => {
-    localStorage.setItem('selectedCountry', countryCode);
-    navigate(`/?country=${countryCode}`);
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-bl from-primary-600 to-primary-800">
+    <div className="min-h-screen bg-ink text-white">
       <Helmet>
         <title>انتخاب کشور | پرشین‌پیجز</title>
         <meta name="description" content="کشور خود را انتخاب کنید و کسب‌وکارهای ایرانی نزدیک خود را پیدا کنید. بیش از ۲۰ کشور و ۱۰۰ شهر." />
         <link rel="canonical" href="https://persianpages.com/select-country" />
       </Helmet>
 
-      <div className="max-w-5xl mx-auto px-4 py-16">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-            پرشین‌پیجز
-          </h1>
-          <p className="text-xl text-primary-100 mb-2">
-            راهنمای کسب‌وکارهای ایرانی در سراسر جهان
-          </p>
-          <p className="text-primary-200">
-            کشور خود را انتخاب کنید
-          </p>
+      <div className="atlas-grid mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-14">
+        <div className="mb-10 flex justify-center">
+          <BrandMark inverted />
         </div>
 
-        {/* Country Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <div className="mx-auto mb-10 max-w-2xl text-center">
+          <p className="mb-3 text-sm font-bold tracking-wide text-primary-300">راهنمای محلی جامعه ایرانی</p>
+          <h1 className="text-balance text-3xl font-black leading-tight sm:text-5xl">کدام کشور را جستجو می‌کنید؟</h1>
+          <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-slate-300 sm:text-base">کشور خود را انتخاب کنید تا شهرها، دسته‌بندی‌ها و اطلاعات تماس کسب‌وکارهای ایرانی مرتبط را ببینید.</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {countries.map((country) => (
-            <button
+            <Link
               key={country.code}
-              onClick={() => handleCountrySelect(country.code)}
-              className="bg-white/10 backdrop-blur-sm rounded-xl p-5 text-center hover:bg-white/20 transition-all hover:scale-105 border border-white/20 group"
+              to={`/browse/${country.code}`}
+              onClick={() => localStorage.setItem('selectedCountry', country.code)}
+              className="group rounded-2xl border border-white/10 bg-white/[0.06] p-4 text-right transition hover:-translate-y-0.5 hover:border-primary-300/60 hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-saffron sm:p-5"
+              aria-label={`انتخاب ${country.name}`}
             >
-              <div className="text-5xl mb-3 group-hover:scale-110 transition-transform">{country.flag}</div>
-              <h3 className="font-semibold text-white text-lg mb-1">{country.name}</h3>
-              <p className="text-primary-200 text-sm font-latin">{country.nameEn}</p>
-            </button>
+              <div className="mb-4 flex items-start justify-between">
+                <span className="text-4xl" aria-hidden="true">{country.flag}</span>
+                <span className="text-primary-300 transition group-hover:-translate-x-1" aria-hidden="true">←</span>
+              </div>
+              <h2 className="font-bold text-white">{country.name}</h2>
+              <p className="mt-1 text-xs text-slate-400 font-latin" dir="ltr">{country.nameEn}</p>
+            </Link>
           ))}
         </div>
 
-        {/* All Countries Link */}
-        <div className="text-center mt-12">
+        <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-6 text-sm text-slate-400 sm:flex-row">
+          <p>{countries.length.toLocaleString('fa-IR')} کشور در یک راهنمای واحد</p>
           <button
             onClick={() => {
               localStorage.removeItem('selectedCountry');
               navigate('/');
             }}
-            className="text-white/80 hover:text-white underline"
+            className="font-bold text-white underline decoration-primary-400 underline-offset-4 hover:text-primary-200"
           >
-            مشاهده همه کشورها
+            فعلاً همه کشورها را ببینم
           </button>
-        </div>
-
-        {/* Footer */}
-        <div className="text-center mt-16 text-primary-200 text-sm">
-          <p>۲۰+ کشور • ۱۰۰+ شهر</p>
         </div>
       </div>
     </div>

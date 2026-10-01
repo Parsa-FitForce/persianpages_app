@@ -10,6 +10,8 @@ import { useGoogleMaps } from '../hooks/useGoogleMaps';
 import { getLocalBusinessSchema, getBreadcrumbSchema } from '../utils/structuredData';
 import { resolveImageUrl } from '../utils/image';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import ListingCard from '../components/ListingCard';
+import { countries, getCitiesByCountry, toSlug } from '../i18n/locations';
 
 const MIN_INDEXABLE_LISTING_DESCRIPTION_LENGTH = 300;
 
@@ -95,6 +97,7 @@ export default function ListingDetail() {
   const { user } = useAuth();
   const { isLoaded } = useGoogleMaps();
   const [listing, setListing] = useState<Listing | null>(null);
+  const [relatedListings, setRelatedListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [claiming, setClaiming] = useState(false);
@@ -132,11 +135,26 @@ export default function ListingDetail() {
 
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
+    setLoading(true);
+    setError('');
     listingsApi
       .getOne(id)
-      .then((res) => setListing(res.data))
-      .catch(() => setError('کسب‌وکار یافت نشد'))
-      .finally(() => setLoading(false));
+      .then((res) => {
+        if (cancelled) return;
+        setListing(res.data);
+        setRelatedListings(res.data.relatedListings || []);
+      })
+      .catch(() => {
+        if (!cancelled) setError('کسب‌وکار یافت نشد');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   if (loading) {
@@ -162,6 +180,19 @@ export default function ListingDetail() {
 
   const isOwner = user?.id === listing.userId;
   const isUnclaimed = !listing.isClaimed && listing.source === 'scraped';
+  const listingCountry = countries.find((country) => country.name === listing.country);
+  const listingCity = listingCountry
+    ? getCitiesByCountry(listingCountry.code).find((city) => city.name === listing.city)
+    : undefined;
+  const countryUrl = listingCountry ? `/browse/${listingCountry.code}` : '/select-country';
+  const cityUrl = listingCountry && listingCity
+    ? `/browse/${listingCountry.code}/${toSlug(listingCity.nameEn)}`
+    : countryUrl;
+  const categoryUrl = listingCountry && listingCity
+    ? `${cityUrl}/${listing.category.slug}`
+    : listingCountry
+      ? `/browse/${listingCountry.code}/category/${listing.category.slug}`
+      : `/search?category=${listing.category.slug}`;
   const listingTitle = `${listing.title} - ${listing.city}، ${listing.country} | پرشین‌پیجز`;
   const listingDescription = listing.description.slice(0, 160);
   const isSeoIndexable = Boolean(
@@ -174,6 +205,7 @@ export default function ListingDetail() {
       && listing.country.trim()
       && listing.phone
       && listing.website
+      && (listing.isClaimed || listing.phoneVerified)
       && (
         listing.photos.length > 0
         || hasBusinessHours(listing.businessHours)
@@ -183,7 +215,7 @@ export default function ListingDetail() {
   );
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-4 md:py-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 md:py-10 lg:px-8">
       <Helmet>
         <title>{listingTitle}</title>
         <meta name="description" content={listingDescription} />
@@ -214,41 +246,50 @@ export default function ListingDetail() {
         </script>
       </Helmet>
 
-      {/* Header */}
-      <div className="flex justify-between items-start mb-4 md:mb-6">
+      <nav className="mb-6 flex flex-wrap items-center gap-2 text-xs text-slate-500" aria-label="مسیر صفحه">
+        <Link to="/" className="hover:text-primary-700">پرشین‌پیجز</Link><span aria-hidden="true">/</span>
+        <Link to={countryUrl} className="hover:text-primary-700">{listing.country}</Link><span aria-hidden="true">/</span>
+        <Link to={cityUrl} className="hover:text-primary-700">{listing.city}</Link><span aria-hidden="true">/</span>
+        <Link to={categoryUrl} className="hover:text-primary-700">{listing.category.nameFa}</Link>
+      </nav>
+
+      <header className="mb-7 grid gap-5 border-b border-slate-200 pb-7 md:grid-cols-[1fr_auto] md:items-end">
         <div>
-          <div className="flex items-center gap-2 mb-1 md:mb-2">
-            <span className="text-sm text-gray-500">
-              {listing.category.icon} {listing.category.nameFa}
-            </span>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Link to={categoryUrl} className="rounded-lg bg-primary-50 px-2.5 py-1 text-sm font-bold text-primary-800">{listing.category.icon} {listing.category.nameFa}</Link>
             {isUnclaimed && (
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                ثبت نشده
+              <span className="inline-flex items-center rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800">
+                مالکیت ثبت نشده
               </span>
             )}
-            {listing.isClaimed && listing.source === 'scraped' && (
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                ثبت شده
+            {listing.isClaimed && (
+              <span className="inline-flex items-center gap-1 rounded-lg bg-primary-50 px-2.5 py-1 text-xs font-bold text-primary-800">
+                <span aria-hidden="true">✓</span> مالک ثبت‌شده
+              </span>
+            )}
+            {listing.phoneVerified && (
+              <span className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-bold text-lapis">
+                <span aria-hidden="true">✓</span> تلفن تأیید‌شده
               </span>
             )}
           </div>
-          <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2">{listing.title}</h1>
-          <p className="text-gray-600">📍 {listing.city}، {listing.country}</p>
+          <h1 className="text-balance text-3xl font-black leading-tight text-ink md:text-5xl">{listing.title}</h1>
+          <p className="mt-3 text-slate-600">{listing.address}، {listing.city}، {listing.country}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {isOwner && (
             <Link
               to={`/listings/${listing.id}/edit`}
               className="btn-secondary"
             >
-              ویرایش
+              ویرایش صفحه
             </Link>
           )}
           {isUnclaimed && user && (
             <button
               onClick={handleClaimClick}
               disabled={claiming}
-              className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors"
+              className="btn-primary disabled:opacity-50"
             >
               {claiming ? 'در حال ثبت...' : 'این کسب‌وکار من است'}
             </button>
@@ -256,13 +297,13 @@ export default function ListingDetail() {
           {isUnclaimed && !user && (
             <Link
               to="/login"
-              className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors"
+              className="btn-primary"
             >
               ورود برای ثبت مالکیت
             </Link>
           )}
         </div>
-      </div>
+      </header>
       {claimError && (
         <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
           {claimError}
@@ -272,17 +313,23 @@ export default function ListingDetail() {
       {/* Photos */}
       <PhotoGallery photos={listing.photos} title={listing.title} />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_360px]">
         {/* Main Content */}
-        <div className="md:col-span-2">
-          <div className="card p-6 mb-6">
-            <h2 className="font-semibold mb-4">درباره کسب‌وکار</h2>
-            <p className="text-gray-700 whitespace-pre-line">{listing.description}</p>
-          </div>
+        <div>
+          <section className="card mb-6 p-6 md:p-8">
+            <h2 className="mb-4 text-2xl font-black text-ink">درباره {listing.title}</h2>
+            <p className="whitespace-pre-line text-base leading-8 text-slate-700">{listing.description}</p>
+          </section>
+
+          <section className="mb-6 grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:grid-cols-3">
+            <div><span className="block text-xs text-slate-500">منبع اطلاعات</span><strong className="mt-1 block text-sm text-ink">{listing.isClaimed ? 'مالک کسب‌وکار' : 'منابع عمومی'}</strong></div>
+            <div><span className="block text-xs text-slate-500">وضعیت تماس</span><strong className="mt-1 block text-sm text-ink">{listing.phoneVerified ? 'شماره تأیید شده' : 'پیش از مراجعه بررسی شود'}</strong></div>
+            <div><span className="block text-xs text-slate-500">آخرین به‌روزرسانی</span><time className="mt-1 block text-sm font-bold text-ink" dateTime={listing.updatedAt}>{new Date(listing.updatedAt).toLocaleDateString('fa-IR')}</time></div>
+          </section>
 
           {/* Map */}
-          <div className="card p-6">
-            <h2 className="font-semibold mb-4">نقشه</h2>
+          <section className="card p-6 md:p-8">
+            <h2 className="mb-4 text-xl font-black text-ink">موقعیت و مسیریابی</h2>
             {listing.latitude && listing.longitude && isLoaded ? (
               <>
                 <div className="rounded-xl overflow-hidden mb-3" style={{ height: 300 }}>
@@ -327,13 +374,17 @@ export default function ListingDetail() {
                 </a>
               </>
             )}
-          </div>
+          </section>
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-6">
+        <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
           <div className="card p-6">
-            <h2 className="font-semibold mb-4">اطلاعات تماس</h2>
+            <h2 className="mb-4 text-xl font-black text-ink">تماس با کسب‌وکار</h2>
+            <div className="mb-5 grid gap-2">
+              {listing.phone && <a href={`tel:${listing.phone}`} className="btn-primary text-center">تماس تلفنی</a>}
+              {listing.website && <a href={listing.website} target="_blank" rel="noopener noreferrer nofollow" className="btn-secondary text-center">باز کردن وب‌سایت رسمی</a>}
+            </div>
             <div className="space-y-3">
               {listing.phone && (() => {
                 const parsed = parsePhoneNumberFromString(listing.phone);
@@ -364,8 +415,8 @@ export default function ListingDetail() {
                   <a
                     href={listing.website}
                     target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary-600 hover:underline"
+                    rel="noopener noreferrer nofollow"
+                    className="font-bold text-primary-700 hover:underline"
                   >
                     وب‌سایت
                   </a>
@@ -474,8 +525,18 @@ export default function ListingDetail() {
               </div>
             </div>
           )}
-        </div>
+        </aside>
       </div>
+
+      {relatedListings.length > 0 && (
+        <section className="mt-14 border-t border-slate-200 pt-10" aria-labelledby="related-listings-heading">
+          <div className="mb-6 flex items-end justify-between gap-4">
+            <div><h2 id="related-listings-heading" className="text-2xl font-black text-ink">گزینه‌های مرتبط</h2><p className="mt-1 text-sm text-slate-500">کسب‌وکارهای هم‌دسته یا نزدیک در {listing.city}</p></div>
+            <Link to={categoryUrl} className="text-sm font-bold text-primary-700">مشاهده راهنمای کامل</Link>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{relatedListings.map((related) => <ListingCard key={related.id} listing={related} />)}</div>
+        </section>
+      )}
 
       {listing.phone && (
         <OtpVerifyModal

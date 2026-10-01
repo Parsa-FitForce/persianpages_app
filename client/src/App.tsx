@@ -1,25 +1,35 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import SupportChat from './components/SupportChat';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import EmailVerificationBanner from './components/EmailVerificationBanner';
-import Home from './pages/Home';
-import Search from './pages/Search';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import AuthCallback from './pages/AuthCallback';
-import Dashboard from './pages/Dashboard';
-import ListingDetail from './pages/ListingDetail';
-import ListingForm from './pages/ListingForm';
-import SelectCountry from './pages/SelectCountry';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
-import VerifyEmail from './pages/VerifyEmail';
-import PrivacyPolicy from './pages/PrivacyPolicy';
-import Terms from './pages/Terms';
-import Settings from './pages/Settings';
-import BrowsePage from './pages/BrowsePage';
+
+const Home = lazy(() => import('./pages/Home'));
+const Search = lazy(() => import('./pages/Search'));
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const AuthCallback = lazy(() => import('./pages/AuthCallback'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const ListingDetail = lazy(() => import('./pages/ListingDetail'));
+const ListingForm = lazy(() => import('./pages/ListingForm'));
+const SelectCountry = lazy(() => import('./pages/SelectCountry'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const Terms = lazy(() => import('./pages/Terms'));
+const Settings = lazy(() => import('./pages/Settings'));
+const BrowsePage = lazy(() => import('./pages/BrowsePage'));
+
+function PageLoader() {
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center" role="status" aria-label="در حال بارگذاری صفحه">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-700" />
+    </div>
+  );
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -61,7 +71,7 @@ export default function App() {
   const { user } = useAuth();
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-porcelain">
       <SupportChat
         appId="persianpages"
         supportUrl={import.meta.env.VITE_SUPPORT_URL || 'http://localhost:5005'}
@@ -70,7 +80,8 @@ export default function App() {
         theme={{ primary: 'bg-primary-600', primaryHover: 'hover:bg-primary-700', text: 'text-white' }}
         buttonPosition="bottom-6 left-6"
       />
-      <Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
         {/* Select Country - No Header */}
         <Route path="/select-country" element={<SelectCountry />} />
 
@@ -154,7 +165,8 @@ export default function App() {
             </>
           }
         />
-      </Routes>
+        </Routes>
+      </Suspense>
     </div>
   );
 }

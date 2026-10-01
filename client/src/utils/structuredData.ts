@@ -40,16 +40,32 @@ export function getWebsiteSchema() {
     '@type': 'WebSite',
     name: 'پرشین‌پیجز',
     alternateName: 'PersianPages',
+    url: SITE_URL,
     description: 'راهنمای جامع کسب‌وکارهای ایرانی در سراسر جهان',
-    inLanguage: 'fa',
+    inLanguage: ['fa', 'en'],
     potentialAction: {
       '@type': 'SearchAction',
       target: {
         '@type': 'EntryPoint',
-        urlTemplate: '/search?search={search_term_string}',
+        urlTemplate: `${SITE_URL}/search?search={search_term_string}`,
       },
       'query-input': 'required name=search_term_string',
     },
+  };
+}
+
+export function getItemListSchema(url: string, listings: Listing[]) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    '@id': `${url}#results`,
+    numberOfItems: listings.length,
+    itemListElement: listings.map((listing, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: listing.title,
+      url: absoluteUrl(`/listing/${listing.slug || listing.id}`),
+    })),
   };
 }
 
@@ -108,6 +124,7 @@ export function getLocalBusinessSchema(listing: Listing) {
 
 export function getCollectionPageSchema(params: {
   name: string;
+  alternateName?: string;
   description: string;
   url: string;
 }) {
@@ -115,8 +132,10 @@ export function getCollectionPageSchema(params: {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
     name: params.name,
+    ...(params.alternateName ? { alternateName: params.alternateName } : {}),
     description: params.description,
     url: params.url,
+    inLanguage: ['fa', 'en'],
     isPartOf: {
       '@type': 'WebSite',
       name: 'پرشین‌پیجز',
