@@ -138,7 +138,9 @@ push_image() {
     # Build image
     log_info "Building Docker image..."
     cd "$PROJECT_ROOT"
-    docker build -f server/Dockerfile.prod -t persianpages-api ./server
+    # Production Fargate tasks run on x86_64 even when deploys originate from
+    # Apple-silicon developer machines.
+    docker build --platform linux/amd64 -f server/Dockerfile.prod -t persianpages-api ./server
 
     # Tag and push
     log_info "Tagging and pushing image..."
