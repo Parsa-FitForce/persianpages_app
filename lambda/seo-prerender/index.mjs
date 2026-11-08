@@ -1,5 +1,12 @@
 import https from 'https';
 
+const REQUEST_TIMEOUT_MS = 10000;
+const SHELL_CACHE_TTL_MS = 60000;
+const HTTPS_AGENT = new https.Agent({ keepAlive: true, maxSockets: 4 });
+let cachedShellHtml = null;
+let cachedShellAt = 0;
+let shellRequest = null;
+
 // Ordering matters: more-specific patterns must come before generic ones.
 const ROUTE_PATTERNS = [
   { pattern: /^\/listing\/([^/]+)\/?$/,
@@ -20,6 +27,7 @@ const STATIC_PAGES = {
     description: 'کشور خود را انتخاب کنید و کسب‌وکارهای ایرانی نزدیک خود را پیدا کنید.',
     url: 'https://persianpages.com/select-country',
     type: 'website',
+    noindex: true,
     bodyHtml: '<main><h1>کسب‌وکارهای ایرانی را بر اساس کشور پیدا کنید</h1><p>کشور مورد نظر را برای مشاهده شهرها، دسته‌بندی‌ها و اطلاعات تماس کسب‌وکارهای ایرانی انتخاب کنید.</p><nav aria-label="کشورها"><ul><li><a href="/browse/us">آمریکا</a></li><li><a href="/browse/ca">کانادا</a></li><li><a href="/browse/gb">انگلستان</a></li><li><a href="/browse/ae">امارات</a></li><li><a href="/browse/es">اسپانیا</a></li><li><a href="/browse/se">سوئد</a></li><li><a href="/browse/it">ایتالیا</a></li></ul></nav><p><a href="/">بازگشت به صفحه اصلی</a></p></main>',
   },
   '/terms': {
@@ -98,7 +106,8 @@ function fetchJson(hostname, path) {
       port: 443,
       path,
       method: 'GET',
-      timeout: 3000,
+      timeout: REQUEST_TIMEOUT_MS,
+      agent: HTTPS_AGENT,
       headers: { 'Accept': 'application/json' },
     };
 
@@ -106,6 +115,10 @@ function fetchJson(hostname, path) {
       let body = '';
       res.on('data', (chunk) => { body += chunk; });
       res.on('end', () => {
+        if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
+          resolve(null);
+          return;
+        }
         try {
           const parsed = JSON.parse(body);
           resolve({
@@ -131,19 +144,50 @@ function fetchHtml(hostname, path) {
       port: 443,
       path,
       method: 'GET',
-      timeout: 3000,
+      timeout: REQUEST_TIMEOUT_MS,
+      agent: HTTPS_AGENT,
     };
 
     const req = https.request(options, (res) => {
       let body = '';
       res.on('data', (chunk) => { body += chunk; });
-      res.on('end', () => resolve(body));
+      res.on('end', () => {
+        if (
+          res.statusCode === 200
+          && body.includes('<div id="root"></div>')
+          && body.includes('</html>')
+        ) {
+          resolve(body);
+          return;
+        }
+        resolve(null);
+      });
     });
 
     req.on('error', () => resolve(null));
     req.on('timeout', () => { req.destroy(); resolve(null); });
     req.end();
   });
+}
+
+async function getShellHtml() {
+  if (cachedShellHtml && Date.now() - cachedShellAt < SHELL_CACHE_TTL_MS) {
+    return cachedShellHtml;
+  }
+  if (!shellRequest) {
+    shellRequest = fetchHtml('persianpages.com', '/index.html')
+      .then((html) => {
+        if (html) {
+          cachedShellHtml = html;
+          cachedShellAt = Date.now();
+        }
+        return html;
+      })
+      .finally(() => {
+        shellRequest = null;
+      });
+  }
+  return shellRequest;
 }
 
 function escapeHtml(str) {
@@ -230,61 +274,123 @@ function injectMeta(html, data) {
   return html;
 }
 
-export async function handler(event) {
-  const response = event.Records[0].cf.response;
-  const request = event.Records[0].cf.request;
+function buildStandaloneHtml(data) {
+  const bodyHtml = data.bodyHtml || '<main><h1>PersianPages</h1><p><a href="/">بازگشت به صفحه اصلی</a></p></main>';
+  return `<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    ${buildMetaTags(data)}
+    <style>body{margin:0;background:#f8fafc;color:#172033;font-family:system-ui,-apple-system,sans-serif;line-height:1.8}main{max-width:72rem;margin:auto;padding:2rem}a{color:#164e9a}li{margin:.5rem 0}article{padding:1rem 0;border-bottom:1px solid #dbe3ee}</style>
+  </head>
+  <body><div id="root">${bodyHtml}</div></body>
+</html>`;
+}
 
-  const isSpaFallback = response.status === '403' || response.status === '404';
-  const isDirectHtml = response.status === '200' && isHtmlResponse(response);
-  if (!isSpaFallback && !isDirectHtml) {
-    return response;
-  }
-
-  const route = parseRoute(request.uri);
-
-  let data;
-  if (!route) {
-    data = {
-      ...NOT_FOUND_META,
-      url: `https://persianpages.com${request.uri}`,
-    };
-  } else if (route.type === 'static') {
-    data = STATIC_PAGES[route.staticPath];
-  } else if (route.type === 'noindex') {
-    data = {
-      title: `PersianPages`,
-      description: 'PersianPages',
-      url: `https://persianpages.com${route.staticPath}`,
-      type: 'website',
-      noindex: true,
-      nofollow: true,
-    };
-  } else {
-    data = await fetchJson('api.persianpages.com', route.metaPath);
-  }
-
-  if (!data) {
-    return response;
-  }
-
-  // Fetch the immutable app shell from the dedicated /index.html cache behavior.
-  const html = await fetchHtml('persianpages.com', '/index.html');
-  if (!html) {
-    return response;
-  }
-
-  const enrichedHtml = injectMeta(html, data);
-
+function applyRenderedResponse(response, data, html, { shellFallback = false } = {}) {
   const statusCode = Number(data.statusCode) || 200;
   response.status = String(statusCode);
-  response.statusDescription = statusCode === 404 ? 'Not Found' : 'OK';
-  response.body = enrichedHtml;
+  response.statusDescription = statusCode === 404
+    ? 'Not Found'
+    : statusCode === 503
+      ? 'Service Unavailable'
+      : 'OK';
+  response.body = html;
   response.headers['content-type'] = [{ key: 'Content-Type', value: 'text/html; charset=utf-8' }];
   response.headers['cache-control'] = [{
     key: 'Cache-Control',
-    value: data.noindex ? 'public, max-age=300' : 'public, max-age=3600',
+    value: statusCode === 503
+      ? 'no-store'
+      : data.noindex
+        ? 'public, max-age=300'
+        : shellFallback
+          ? 'public, max-age=60'
+          : 'public, max-age=3600',
   }];
+  if (statusCode === 503) {
+    response.headers['retry-after'] = [{ key: 'Retry-After', value: '60' }];
+  } else {
+    delete response.headers['retry-after'];
+  }
   delete response.headers['content-length'];
-
   return response;
 }
+
+export function createHandler({
+  fetchJsonFn = fetchJson,
+  getShellHtmlFn = getShellHtml,
+} = {}) {
+  return async function seoPrerenderHandler(event) {
+    const response = event.Records[0].cf.response;
+    const request = event.Records[0].cf.request;
+
+    const isSpaFallback = response.status === '403' || response.status === '404';
+    const isDirectHtml = response.status === '200' && isHtmlResponse(response);
+    if (!isSpaFallback && !isDirectHtml) {
+      return response;
+    }
+
+    const route = parseRoute(request.uri);
+
+    let dataPromise;
+    if (!route) {
+      dataPromise = Promise.resolve({
+        ...NOT_FOUND_META,
+        url: `https://persianpages.com${request.uri}`,
+      });
+    } else if (route.type === 'static') {
+      dataPromise = Promise.resolve(STATIC_PAGES[route.staticPath]);
+    } else if (route.type === 'noindex') {
+      dataPromise = Promise.resolve({
+        title: 'PersianPages',
+        description: 'PersianPages',
+        url: `https://persianpages.com${route.staticPath}`,
+        type: 'website',
+        noindex: true,
+        nofollow: true,
+      });
+    } else {
+      dataPromise = fetchJsonFn('api.persianpages.com', route.metaPath);
+    }
+
+    // These network requests used to run sequentially inside a five-second
+    // Lambda. On a cold edge invocation that regularly returned the raw S3 403
+    // before either request finished. Run them together and retain a readable
+    // standalone document if the app shell is temporarily unavailable.
+    const [data, shellHtml] = await Promise.all([
+      dataPromise,
+      getShellHtmlFn(),
+    ]);
+
+    if (!data) {
+      const transientData = {
+        title: 'PersianPages temporarily unavailable',
+        description: 'Please try this page again shortly.',
+        url: `https://persianpages.com${request.uri}`,
+        type: 'website',
+        noindex: true,
+        nofollow: true,
+        statusCode: 503,
+        bodyHtml: '<main><h1>صفحه موقتاً در دسترس نیست</h1><p>لطفاً کمی بعد دوباره تلاش کنید.</p></main>',
+      };
+      const transientHtml = shellHtml
+        ? injectMeta(shellHtml, transientData)
+        : buildStandaloneHtml(transientData);
+      return applyRenderedResponse(response, transientData, transientHtml, {
+        shellFallback: !shellHtml,
+      });
+    }
+
+    const usedStandaloneShell = !shellHtml;
+    const enrichedHtml = shellHtml
+      ? injectMeta(shellHtml, data)
+      : buildStandaloneHtml(data);
+
+    return applyRenderedResponse(response, data, enrichedHtml, {
+      shellFallback: usedStandaloneShell,
+    });
+  };
+}
+
+export const handler = createHandler();

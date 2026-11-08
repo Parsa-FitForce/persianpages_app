@@ -163,7 +163,6 @@ ${entries}
 function getStaticSitemapUrls(): SitemapUrl[] {
   return [
     { loc: `${SITE_URL}/` },
-    { loc: `${SITE_URL}/select-country` },
   ];
 }
 
@@ -326,7 +325,8 @@ router.get('/sitemap.xml', async (_req: Request, res: Response) => {
   }
 });
 
-// Static pages sitemap — homepage + select-country
+// Static pages sitemap — homepage only. The country selector is a useful UI
+// route, but the stronger country hubs already provide the indexable content.
 router.get('/sitemap-static.xml', (_req: Request, res: Response) => {
   const xml = renderUrlset(getStaticSitemapUrls());
 

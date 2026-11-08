@@ -11,6 +11,7 @@ export default function SelectCountry() {
       <Helmet>
         <title>انتخاب کشور | پرشین‌پیجز</title>
         <meta name="description" content="کشور خود را انتخاب کنید و کسب‌وکارهای ایرانی نزدیک خود را پیدا کنید. بیش از ۲۰ کشور و ۱۰۰ شهر." />
+        <meta name="robots" content="noindex, follow" />
         <link rel="canonical" href="https://persianpages.com/select-country" />
       </Helmet>
 

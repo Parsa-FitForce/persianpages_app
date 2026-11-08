@@ -172,9 +172,9 @@ router.get('/browse', async (req: Request, res: Response) => {
   }
 });
 
-// Strong canonical listings for homepage discovery. Keep this route aligned
-// with the listing sitemap so the homepage never promotes thin or duplicate
-// URLs to users or search engines.
+// First-party-trusted canonical listings for homepage discovery. Keep this
+// route aligned with the listing sitemap so the homepage never promotes a
+// standalone URL that the SEO policy intentionally marks noindex.
 router.get('/featured', async (req: Request, res: Response) => {
   try {
     const country = typeof req.query.country === 'string' ? req.query.country.trim() : '';
@@ -187,10 +187,8 @@ router.get('/featured', async (req: Request, res: Response) => {
       },
       orderBy: { updatedAt: 'desc' },
     });
-    const canonicalListings = selectCanonicalListings(
-      allListings,
-      isSeoEligibleBrowseSource
-    ).filter((listing) => !country || listing.country === country);
+    const canonicalListings = selectCanonicalListings(allListings)
+      .filter((listing) => !country || listing.country === country);
 
     res.set('Cache-Control', 'public, max-age=300');
     return res.json({

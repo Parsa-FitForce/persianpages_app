@@ -714,7 +714,7 @@ router.get('/home', async (_req: Request, res: Response) => {
       listings,
       isSeoEligibleBrowseSource
     );
-    const recentListings = canonicalListings.slice(0, 12);
+    const recentListings = selectCanonicalListings(listings).slice(0, 12);
     const countryCounts = new Map<string, number>();
     const priorityPageCounts = new Map<string, { count: number; label: string; href: string }>();
     const addPriorityPage = (key: string, label: string, href: string) => {

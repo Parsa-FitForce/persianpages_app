@@ -39,13 +39,16 @@ data "archive_file" "seo_prerender" {
 
 # Lambda@Edge function (must be in us-east-1)
 resource "aws_lambda_function" "seo_prerender" {
-  filename         = data.archive_file.seo_prerender.output_path
-  function_name    = "${local.name_prefix}-seo-prerender"
-  role             = aws_iam_role.lambda_edge.arn
-  handler          = "index.handler"
-  runtime          = "nodejs20.x"
-  timeout          = 5
-  memory_size      = 128
+  filename      = data.archive_file.seo_prerender.output_path
+  function_name = "${local.name_prefix}-seo-prerender"
+  role          = aws_iam_role.lambda_edge.arn
+  handler       = "index.handler"
+  runtime       = "nodejs20.x"
+  # Origin-response Lambda@Edge functions can run for up to 30 seconds. The
+  # renderer performs two HTTPS reads on a cold edge location, so five seconds
+  # was too short and intermittently leaked the S3 403 fallback to crawlers.
+  timeout          = 20
+  memory_size      = 256
   publish          = true
   source_code_hash = data.archive_file.seo_prerender.output_base64sha256
 
